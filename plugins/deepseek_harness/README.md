@@ -31,8 +31,7 @@ Requires `pip install open-dream-rsi` (or `PYTHONPATH` exported at launch —
 the bundle re-passes it). From a directory holding your `tasks.json`:
 
 ```bash
-# from the npm registry (after `npm publish`), a tarball, a checkout,
-# or straight from GitHub — pick one:
+# from the npm registry, a tarball, a checkout, or straight from GitHub — pick one:
 dsh plugin --profile <name> add dsh-open-dream-rsi
 dsh plugin --profile <name> add /path/to/dsh-open-dream-rsi-0.1.0.tgz
 dsh plugin --profile <name> add /path/to/open-dream-rsi/plugins/deepseek_harness
