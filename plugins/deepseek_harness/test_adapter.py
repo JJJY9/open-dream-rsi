@@ -61,11 +61,24 @@ class TestStdioOverlayContract(unittest.TestCase):
 
     def test_env_repass_after_dsh_scrubbing(self):
         # DSH drops child-env names matching KEY|PASSWORD|SECRET|TOKEN and
-        # all DSH_*; the overlay must re-pass the resolution vars explicitly.
+        # all DSH_*. Both adapters re-pass the LLM-resolution vars but DROP
+        # unset/empty ones: an empty ODR_LLM_PRESET="" must never reach the
+        # child (older ODR releases died with "Unknown preset ''").
         for var in ["OPENAI_BASE_URL", "OPENAI_API_KEY", "ODR_LLM_MODEL",
                     "ODR_LLM_PRESET", "PYTHONPATH"]:
             self.assertRegex(
-                self.text, rf"{var}: !!js process\.env\.{var}")
+                self.text, rf"{var}: !!js process\.env\.{var} \|\| undefined")
+        self.assertNotIn("|| ''", self.text)
+
+    def test_bundle_env_via_bridge_drops_empty(self):
+        # The npm bundle routes the child env through the bridge's
+        # childEnv(), which passes only vars that are actually set.
+        patch_text = (_PLUGIN / "cordis.patch.yml").read_text(encoding="utf-8")
+        self.assertIn("env: !!js ctx.odrBundle.childEnv()", patch_text)
+        bridge = (_PLUGIN / "bridge.js").read_text(encoding="utf-8")
+        for var in ["OPENAI_BASE_URL", "OPENAI_API_KEY", "ODR_LLM_MODEL",
+                    "ODR_LLM_PRESET", "PYTHONPATH"]:
+            self.assertIn(f'"{var}"', bridge)
 
     def test_tool_call_timeout_exceeds_default(self):
         match = re.search(r"toolCallTimeoutMs:\s*(\d+)", self.text)

@@ -28,15 +28,7 @@
           - !!js process.getBuiltinModule('node:path').join(process.cwd(), 'tasks.json')
           - '--memory'
           - !!js process.getBuiltinModule('node:path').join(process.cwd(), '.dream_rsi')
-        env:
-          # DSH scrubs the spawned child's environment (names matching
-          # KEY|PASSWORD|SECRET|TOKEN and all DSH_*); re-pass the LLM
-          # resolution vars explicitly. Without them the dreamer falls back
-          # to http://127.0.0.1:8000/v1 with model auto-detection.
-          OPENAI_BASE_URL: !!js process.env.OPENAI_BASE_URL || ''
-          OPENAI_API_KEY: !!js process.env.OPENAI_API_KEY || ''
-          ODR_LLM_MODEL: !!js process.env.ODR_LLM_MODEL || ''
-          ODR_LLM_PRESET: !!js process.env.ODR_LLM_PRESET || ''
+        env: !!js ctx.odrBundle.childEnv()
         cwd: !!js process.cwd()
         # ODR improvement cycles (odr_run_once, odr_dream) run for many
         # minutes — the 60 s default per-call timeout would kill them

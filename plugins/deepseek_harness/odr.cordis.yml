@@ -22,13 +22,20 @@
           - '--memory'
           - '/ABSOLUTE/PATH/projects/myproject/.dream_rsi'
         env:
-          OPENAI_BASE_URL: !!js process.env.OPENAI_BASE_URL || ''
-          OPENAI_API_KEY: !!js process.env.OPENAI_API_KEY || ''
-          ODR_LLM_MODEL: !!js process.env.ODR_LLM_MODEL || ''
-          ODR_LLM_PRESET: !!js process.env.ODR_LLM_PRESET || ''
+          # DSH scrubs the spawned child's environment (names matching
+          # KEY|PASSWORD|SECRET|TOKEN and all DSH_*), so OPENAI_* / ODR_LLM_*
+          # are re-passed — but DROPPING unset/empty ones (|| undefined):
+          # an empty ODR_LLM_PRESET="" must never reach the child (older ODR
+          # releases died with "Unknown preset ''"; Node omits undefined
+          # keys at spawn). Without OPENAI_* the dreamer falls back to
+          # http://127.0.0.1:8000/v1 with model auto-detection.
+          OPENAI_BASE_URL: !!js process.env.OPENAI_BASE_URL || undefined
+          OPENAI_API_KEY: !!js process.env.OPENAI_API_KEY || undefined
+          ODR_LLM_MODEL: !!js process.env.ODR_LLM_MODEL || undefined
+          ODR_LLM_PRESET: !!js process.env.ODR_LLM_PRESET || undefined
           # Running from a checkout (no pip install): the outer shell's
           # PYTHONPATH pointing at the open-dream-rsi repo survives here.
-          PYTHONPATH: !!js process.env.PYTHONPATH || ''
+          PYTHONPATH: !!js process.env.PYTHONPATH || undefined
         cwd: !!js process.cwd()
         # ODR improvement cycles (odr_run_once, odr_dream) run for many
         # minutes — the 60 s default per-call timeout would kill them

@@ -1,6 +1,6 @@
 {
   "name": "dsh-open-dream-rsi",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Let your coding agent dream: strategies must survive counterfactual replay before they earn trust. An offline self-improvement loop over an evolving world model — no fine-tuning, the LLM stays frozen. Speaks MCP. Ships its Python server inside the package: the only requirement is a system python3 (3.10+) on PATH — no pip, no PYTHONPATH.",
   "type": "module",
   "license": "MIT",

@@ -86,11 +86,16 @@ The URL is a credential — see the note in the overlay.
 ## Environment scrubbing
 
 DSH scrubs the spawned child's environment (names matching
-`KEY|PASSWORD|SECRET|TOKEN` and everything `DSH_*`). The stdio overlay
-therefore re-passes `OPENAI_BASE_URL` / `OPENAI_API_KEY` / `ODR_LLM_*`
-explicitly from the harness process's environment. Without them the dreamer
-falls back to `http://127.0.0.1:8000/v1` (vLLM/Ollama default) and
-auto-detects the served model. No key is needed for a local endpoint.
+`KEY|PASSWORD|SECRET|TOKEN` and everything `DSH_*`). The bundle's bridge
+(`childEnv()`) re-passes only the LLM-resolution vars that are **actually
+set** in the harness process (`OPENAI_BASE_URL`, `OPENAI_API_KEY`,
+`ODR_LLM_MODEL`, `ODR_LLM_PRESET`, `ODR_LLM_NO_THINKING`, `PYTHONPATH`);
+empty values are dropped, so a stale empty `ODR_LLM_PRESET` can never break
+provider resolution. Without `OPENAI_*` the dreamer falls back to
+`http://127.0.0.1:8000/v1` (vLLM/Ollama default) and auto-detects the
+served model. No key is needed for a local endpoint. To pin a provider
+explicitly, export e.g. `ODR_LLM_PRESET=local` (or `openai`/`cursor`/
+`goose`) before launching `dsh`.
 
 ## Timeouts
 

@@ -349,10 +349,14 @@ The bundle ships the Python server inside the package — only `python3`
 beside the directory `dsh` launches from; override the
 `mcp-open-dream-rsi` row from your profile's `cordis.patch.yml` (same id).
 DSH scrubs the spawned child's environment (names matching
-`KEY|PASSWORD|SECRET|TOKEN` and all `DSH_*`), so the bundle re-passes
-`OPENAI_BASE_URL` / `OPENAI_API_KEY` / `ODR_LLM_*` / `PYTHONPATH` from the
-harness process's env — without them the dreamer falls back to
-`http://127.0.0.1:8000/v1` with model auto-detection (fine for a local
+`KEY|PASSWORD|SECRET|TOKEN` and all `DSH_*`). Both adapters re-pass the
+LLM-resolution vars (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `ODR_LLM_*`,
+`PYTHONPATH`) but **drop unset/empty ones** — an empty `ODR_LLM_PRESET=""`
+must never reach the child, because older ODR releases fed it straight into
+provider selection and died with `Unknown preset ''`. The bundle's bridge
+builds the child env itself (`childEnv()`); the overlay uses
+`process.env.VAR || undefined`. Without `OPENAI_*` the dreamer falls back
+to `http://127.0.0.1:8000/v1` with model auto-detection (fine for a local
 vLLM/Ollama, needs no key). `toolCallTimeoutMs: 1800000` replaces the 60 s
 default because `odr_run_once`/`odr_dream` cycles run for many minutes.
 
