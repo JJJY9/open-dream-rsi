@@ -1,7 +1,7 @@
 {
   "name": "dsh-open-dream-rsi",
-  "version": "0.1.0",
-  "description": "DeepSeek Harness bundle: run the open-dream-rsi (ODR) self-improvement loop as mcp__open_dream_rsi__* tools",
+  "version": "0.1.1",
+  "description": "Let your coding agent dream: an offline self-improvement loop that grinds task attempts in a sandbox, keeps only test-passing recipes, and serves them to any MCP-speaking agent as odr_* tools.",
   "type": "module",
   "license": "MIT",
   "author": "patrykorwat",
