@@ -35,6 +35,14 @@ through Evolving Worlds* (Dream-RSI, Zheng et al.,
 **Zero runtime dependencies** — Python 3.10+ stdlib only, ~10.2k lines of
 library code, ~5.1k lines of tests, no build step.
 
+**Not another memory plugin.** Experience-memory systems record what the
+agent learned and reuse it as-is. ODR is an *evolving worlds* loop: every
+attempt is recorded into a Discovery Tree, and between runs the system
+dreams — replaying thousands of strategy variants against that recorded
+world. Nothing is promoted on the model's word alone: a candidate policy,
+recipe or lesson replaces the incumbent only after surviving counterfactual
+replay.
+
 **Evaluation policy:** this project makes performance claims on exactly
 **one benchmark — goose × TravelPlanner**, public and scored by the
 benchmark's own evaluators ([below](#benchmark-goose--travelplanner-public-externally-scored)).

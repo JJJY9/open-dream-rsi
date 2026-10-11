@@ -1,7 +1,7 @@
 {
   "name": "dsh-open-dream-rsi",
-  "version": "0.1.1",
-  "description": "Let your coding agent dream: an offline self-improvement loop that grinds task attempts in a sandbox, keeps only test-passing recipes, and serves them to any MCP-speaking agent as odr_* tools.",
+  "version": "0.1.2",
+  "description": "Let your coding agent dream: strategies must survive counterfactual replay before they earn trust. An offline self-improvement loop over an evolving world model — no fine-tuning, the LLM stays frozen. Speaks MCP.",
   "type": "module",
   "license": "MIT",
   "author": "patrykorwat",
