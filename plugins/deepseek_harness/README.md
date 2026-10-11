@@ -27,8 +27,10 @@ override the `mcp-open-dream-rsi` row from your profile's `cordis.patch.yml`
 
 ## Install as a bundle (`dsh plugin add`)
 
-Requires `pip install open-dream-rsi` (or `PYTHONPATH` exported at launch —
-the bundle re-passes it). From a directory holding your `tasks.json`:
+Requires the Python package (not on PyPI — install from the repo):
+`python3 -m pip install git+https://github.com/patrykorwat/open-dream-rsi`
+(or `PYTHONPATH` exported at launch — the bundle re-passes it). From a
+directory holding your `tasks.json`:
 
 ```bash
 # from the npm registry, a tarball, a checkout, or straight from GitHub — pick one:
@@ -52,8 +54,9 @@ pnpm fetches sources, not releases.)
 
 ## Install (stdio, `--patch` overlay)
 
-1. Make the server importable: `pip install open-dream-rsi`, or export
-   `PYTHONPATH=<ODR checkout>` in the overlay's `env:` block.
+1. Make the server importable (not on PyPI — install from the repo):
+   `python3 -m pip install git+https://github.com/patrykorwat/open-dream-rsi`,
+   or export `PYTHONPATH=<ODR checkout>` in the overlay's `env:` block.
 
 2. Edit both `/ABSOLUTE/PATH/...` placeholders in
    [`odr.cordis.yml`](odr.cordis.yml) to your project's `tasks.json` and

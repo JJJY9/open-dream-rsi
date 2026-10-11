@@ -458,7 +458,7 @@ files — the evidence you already produced is the counterparty.
 For a mass install the whole thing is two artifacts, no host glue:
 
 ```bash
-pip install open-dream-rsi                       # library + CLI + MCP server
+python3 -m pip install git+https://github.com/patrykorwat/open-dream-rsi  # library + CLI + MCP server
 cp -r plugins/hermes_odr_trigger $HERMES_HOME/plugins/odr-trigger
 hermes plugins enable odr-trigger                # restart to load the hook
 # optional overrides:
