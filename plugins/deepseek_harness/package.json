@@ -1,10 +1,15 @@
 {
   "name": "dsh-open-dream-rsi",
-  "version": "0.1.2",
-  "description": "Let your coding agent dream: strategies must survive counterfactual replay before they earn trust. An offline self-improvement loop over an evolving world model — no fine-tuning, the LLM stays frozen. Speaks MCP.",
+  "version": "0.1.3",
+  "description": "Let your coding agent dream: strategies must survive counterfactual replay before they earn trust. An offline self-improvement loop over an evolving world model — no fine-tuning, the LLM stays frozen. Speaks MCP. Ships its Python server inside the package: the only requirement is a system python3 (3.10+) on PATH — no pip, no PYTHONPATH.",
   "type": "module",
   "license": "MIT",
   "author": "patrykorwat",
+  "main": "bridge.js",
+  "exports": {
+    ".": "./bridge.js",
+    "./bridge": "./bridge.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/patrykorwat/open-dream-rsi.git",
@@ -20,6 +25,9 @@
     "agent"
   ],
   "files": [
+    "bridge.js",
+    "run_mcp.py",
+    "open_dream_rsi",
     "cordis.patch.yml"
   ],
   "dsh": {

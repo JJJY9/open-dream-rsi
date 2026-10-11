@@ -343,7 +343,9 @@ dsh plugin --profile web add dsh-open-dream-rsi
 
 The tools appear as `mcp__open_dream_rsi__<tool>` (`odr_status`,
 `odr_recipes`, `odr_lessons`, `odr_add_task`, `odr_run_once`, `odr_dream`).
-Bundle defaults point `--tasks`/`--memory` at `tasks.json`/`.dream_rsi`
+The bundle ships the Python server inside the package — only `python3`
+(3.10+) on PATH is required, no pip install. Bundle defaults point
+`--tasks`/`--memory` at `tasks.json`/`.dream_rsi`
 beside the directory `dsh` launches from; override the
 `mcp-open-dream-rsi` row from your profile's `cordis.patch.yml` (same id).
 DSH scrubs the spawned child's environment (names matching

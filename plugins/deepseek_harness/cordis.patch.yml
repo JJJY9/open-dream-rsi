@@ -2,19 +2,27 @@
 # stdio behind DSH's first-party bridge. Tools appear as
 # mcp__open_dream_rsi__<tool>.
 #
+# The Python sources ship inside this npm package (open_dream_rsi/, stdlib
+# only); the odr-bundle-paths row publishes where they live, and the
+# mcp-client row spawns the system python3 against the vendored entry point —
+# no pip install, no PYTHONPATH. Only python3 (>= 3.10) must be on PATH.
+#
 # Paths default to the directory `dsh` was launched from (tasks.json and
-# .dream_rsi beside it). Override this row from your profile's
-# cordis.patch.yml (same id; a config override replaces the whole config).
+# .dream_rsi beside it). Override the mcp-open-dream-rsi row from your
+# profile's cordis.patch.yml (same id; a config override replaces the whole
+# config).
 - insert:
+    - id: odr-bundle-paths
+      name: dsh-open-dream-rsi/bridge
     - id: mcp-open-dream-rsi
       name: '@deepseek-ai/dsh-mcp-client'
+      inject: [odrBundle]
       config:
         serverName: open_dream_rsi
         transport: stdio
-        command: python3
+        command: !!js ctx.odrBundle.python
         args:
-          - '-m'
-          - 'open_dream_rsi'
+          - !!js ctx.odrBundle.runner
           - 'mcp'
           - '--tasks'
           - !!js process.getBuiltinModule('node:path').join(process.cwd(), 'tasks.json')
@@ -29,9 +37,6 @@
           OPENAI_API_KEY: !!js process.env.OPENAI_API_KEY || ''
           ODR_LLM_MODEL: !!js process.env.ODR_LLM_MODEL || ''
           ODR_LLM_PRESET: !!js process.env.ODR_LLM_PRESET || ''
-          # Running from a checkout (no pip install): the outer shell's
-          # PYTHONPATH pointing at the open-dream-rsi repo survives here.
-          PYTHONPATH: !!js process.env.PYTHONPATH || ''
         cwd: !!js process.cwd()
         # ODR improvement cycles (odr_run_once, odr_dream) run for many
         # minutes — the 60 s default per-call timeout would kill them
