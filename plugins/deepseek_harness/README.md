@@ -19,14 +19,18 @@ No code ships here — only two overlay files and this guide.
 | `cordis.patch.yml` + `package.json` | bundle (npm) | installable `dsh plugin add` package    |
 
 The npm bundle ships the ODR Python server inside the package
-(`open_dream_rsi/`, stdlib-only) plus a tiny bridge (`bridge.js`) that
-publishes where it lives; the layer inserts the in-box
-`@deepseek-ai/dsh-mcp-client` row pointing the system `python3` at the
-vendored entry point (`run_mcp.py`). No pip, no PYTHONPATH, no build step
-and no build allowance even for git installs. Bundle defaults resolve
-`tasks.json` / `.dream_rsi` beside the directory `dsh` launches from;
-override the `mcp-open-dream-rsi` row from your profile's `cordis.patch.yml`
-(same id — a config override replaces the whole config).
+(`open_dream_rsi/`, stdlib-only) plus a tiny bridge (`bridge.js`) that does
+two things: it publishes where the vendored entry point lives
+(`run_mcp.py`), and it **is the dreamer's brain** — an in-process
+OpenAI-compatible proxy that forwards every ODR LLM call to the model the
+harness itself is configured with (`ctx.llm.stream`), so the Python child
+needs no API keys, no presets and no extra endpoints. The layer inserts the
+in-box `@deepseek-ai/dsh-mcp-client` row pointing the system `python3` at
+the vendored entry point. No pip, no PYTHONPATH, no build step and no build
+allowance even for git installs. Bundle defaults resolve `tasks.json` /
+`.dream_rsi` beside the directory `dsh` launches from; override the
+`mcp-open-dream-rsi` row from your profile's `cordis.patch.yml` (same id —
+a config override replaces the whole config).
 
 ## Install as a bundle (`dsh plugin add`)
 
@@ -36,8 +40,8 @@ directory holding your `tasks.json`:
 
 ```bash
 # from the npm registry, a tarball, a checkout, or straight from GitHub — pick one:
-dsh plugin --profile <name> add dsh-open-dream-rsi            # or pin: dsh-open-dream-rsi@0.1.4
-dsh plugin --profile <name> add /path/to/dsh-open-dream-rsi-0.1.4.tgz
+dsh plugin --profile <name> add dsh-open-dream-rsi            # or pin: dsh-open-dream-rsi@0.2.0
+dsh plugin --profile <name> add /path/to/dsh-open-dream-rsi-0.2.0.tgz
 dsh plugin --profile <name> add /path/to/open-dream-rsi/plugins/deepseek_harness
 dsh plugin --profile <name> add github:patrykorwat/open-dream-rsi#path:plugins/deepseek_harness
 
@@ -83,19 +87,32 @@ pnpm fetches sources, not releases.)
 Serve the endpoint first, then apply `odr-http.cordis.yml` the same way.
 The URL is a credential — see the note in the overlay.
 
-## Environment scrubbing
+## Where the dreamer's model comes from
 
-DSH scrubs the spawned child's environment (names matching
-`KEY|PASSWORD|SECRET|TOKEN` and everything `DSH_*`). The bundle's bridge
-(`childEnv()`) re-passes only the LLM-resolution vars that are **actually
-set** in the harness process (`OPENAI_BASE_URL`, `OPENAI_API_KEY`,
-`ODR_LLM_MODEL`, `ODR_LLM_PRESET`, `ODR_LLM_NO_THINKING`, `PYTHONPATH`);
-empty values are dropped, so a stale empty `ODR_LLM_PRESET` can never break
-provider resolution. Without `OPENAI_*` the dreamer falls back to
-`http://127.0.0.1:8000/v1` (vLLM/Ollama default) and auto-detects the
-served model. No key is needed for a local endpoint. To pin a provider
-explicitly, export e.g. `ODR_LLM_PRESET=local` (or `openai`/`cursor`/
-`goose`) before launching `dsh`.
+The bundle needs **no LLM configuration at all**. The bridge runs an
+OpenAI-compatible proxy inside the harness process; the Python child is
+pointed at it via `OPENAI_BASE_URL=http://127.0.0.1:<port>/v1` and every
+`/v1/chat/completions` call is served by the harness's own configured model
+through the dsh-llm service (`ctx.llm.stream`). The model is resolved once:
+the first registered provider, and — unless `ODR_LLM_MODEL` is set — its
+first catalog model (`ctx.llm.listModels`). `GET /v1/models` reports that
+model, so ODR's auto-detection picks it up.
+
+Escape hatch: if the harness process already has a real `OPENAI_BASE_URL`
+set, the child is pointed there directly and the proxy stays idle (direct
+mode). Set `ODR_LLM_MODEL` to pin a specific model in either mode.
+
+Environment scrubbing still applies: DSH drops child-env names matching
+`KEY|PASSWORD|SECRET|TOKEN` and everything `DSH_*`, and the bridge
+(`childEnv()`) re-passes only LLM vars that are **actually set** — an empty
+`ODR_LLM_PRESET=""` never reaches the child (older ODR releases fed it into
+preset selection and died with `Unknown preset ''`).
+
+The hand-rolled `--patch` overlay (`odr.cordis.yml`) has no bridge: it
+re-passes the vars it needs (`process.env.VAR || undefined`) and ODR then
+resolves an endpoint itself — `OPENAI_*` env, a preset
+(`ODR_LLM_PRESET=local|openai|cursor|goose`), or its local default
+(`http://127.0.0.1:8000/v1` with model auto-detection).
 
 ## Timeouts
 
@@ -112,9 +129,10 @@ In a DSH session:
    summary (policies, recipes, events). Expected on a fresh memory dir:
    zeros plus a hint, not an error.
 2. `mcp__open_dream_rsi__odr_add_task` with a small task (prompt + tests),
-   then `mcp__open_dream_rsi__odr_run_once` — the cycle needs a resolvable
-   LLM endpoint (env, goose config, or localhost vLLM); with none reachable
-   it reports the resolution failure instead of hanging.
+   then `mcp__open_dream_rsi__odr_run_once` — with the bundle, the cycle
+   calls the model your harness session already uses; with the overlay, it
+   needs a resolvable LLM endpoint (env, preset, or localhost vLLM) and
+   reports the resolution failure instead of hanging.
 
 Model-facing behavior notes (recipes as warm start, add-task-then-dream
 workflow) live in the main README's "Plug in your favourite agent" section.

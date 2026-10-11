@@ -424,15 +424,19 @@ The bundle ships the Python server inside the package — only `python3`
 beside the directory `dsh` launches from; override the
 `mcp-open-dream-rsi` row from your profile's `cordis.patch.yml` (same id).
 DSH scrubs the spawned child's environment (names matching
-`KEY|PASSWORD|SECRET|TOKEN` and all `DSH_*`). Both adapters re-pass the
-LLM-resolution vars (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `ODR_LLM_*`,
-`PYTHONPATH`) but **drop unset/empty ones** — an empty `ODR_LLM_PRESET=""`
-must never reach the child, because older ODR releases fed it straight into
-provider selection and died with `Unknown preset ''`. The bundle's bridge
-builds the child env itself (`childEnv()`); the overlay uses
-`process.env.VAR || undefined`. Without `OPENAI_*` the dreamer falls back
-to `http://127.0.0.1:8000/v1` with model auto-detection (fine for a local
-vLLM/Ollama, needs no key). `toolCallTimeoutMs: 1800000` replaces the 60 s
+`KEY|PASSWORD|SECRET|TOKEN` and all `DSH_*`). The bundle's bridge
+(`childEnv()`) re-passes only LLM vars that are **actually set** — an empty
+`ODR_LLM_PRESET=""` never reaches the child, because older ODR releases fed
+it straight into provider selection and died with `Unknown preset ''` —
+and, when the harness process has no `OPENAI_BASE_URL`, points the child at
+its own in-process OpenAI-compatible proxy: every dreamer LLM call is then
+served by the model the harness is already configured with
+(`ctx.llm.stream`), no API keys or presets needed. A real `OPENAI_BASE_URL`
+in the harness env bypasses the proxy (direct mode). The hand-rolled
+overlay re-passes `OPENAI_*`/`ODR_LLM_*` via `process.env.VAR || undefined`
+and lets ODR resolve an endpoint itself (env, a preset like
+`ODR_LLM_PRESET=local`, or the `http://127.0.0.1:8000/v1` auto-detect).
+`toolCallTimeoutMs: 1800000` replaces the 60 s
 default because `odr_run_once`/`odr_dream` cycles run for many minutes.
 
 Prefer a hand-rolled overlay?

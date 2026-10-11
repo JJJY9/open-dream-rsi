@@ -7,6 +7,11 @@
 # mcp-client row spawns the system python3 against the vendored entry point —
 # no pip install, no PYTHONPATH. Only python3 (>= 3.10) must be on PATH.
 #
+# The dreamer never resolves an LLM endpoint itself: childEnv() points it at
+# the bridge's in-process OpenAI-compatible proxy, which forwards every call
+# to the model the harness is already configured with (ctx.llm.stream). A
+# real OPENAI_BASE_URL in the harness env bypasses the proxy (direct mode).
+#
 # Paths default to the directory `dsh` was launched from (tasks.json and
 # .dream_rsi beside it). Override the mcp-open-dream-rsi row from your
 # profile's cordis.patch.yml (same id; a config override replaces the whole

@@ -1,16 +1,23 @@
 """Adapter tests for the DeepSeek Harness plugin (no DSH runtime required).
 
 The adapter is pure configuration: two Cordis overlays that insert the ODR
-MCP server behind ``@deepseek-ai/dsh-mcp-client``. These tests pin the
-overlay contract — entry shape, server naming, the env re-pass (DSH spawns
-stdio children with a scrubbed environment), the long tool-call timeout —
-and verify that the exact stdio command the overlay configures speaks the
-MCP protocol. DSH-side loading is verified manually with
-``dsh --patch <overlay> --dump-config`` (needs the npm package).
+MCP server behind ``@deepseek-ai/dsh-mcp-client``, plus the npm bundle's
+``bridge.js`` — which both publishes the vendored server's location and
+serves the dreamer's LLM calls through an in-process OpenAI-compatible
+proxy backed by the harness's own dsh-llm service. These tests pin the
+overlay contract (entry shape, server naming, the env re-pass — DSH spawns
+stdio children with a scrubbed environment — the long tool-call timeout),
+the bridge contract (child env points the child at the proxy unless the
+harness has a real OPENAI_BASE_URL; the proxy answers /v1/models and
+/v1/chat/completions from ctx.llm.stream), and verify that the exact stdio
+command the overlay configures speaks the MCP protocol. DSH-side loading is
+verified manually with ``dsh --patch <overlay> --dump-config`` (needs the
+npm package).
 """
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -163,5 +170,135 @@ class TestOverlayCommandSpeaksMCP(unittest.TestCase):
                  "odr_add_task", "odr_run_once", "odr_dream"})
 
 
+class TestBridgeProxy(unittest.TestCase):
+    """bridge.js is the dreamer's brain: an in-process OpenAI-compatible
+    proxy backed by the harness's own dsh-llm service. Driven through node
+    with a fake ctx.llm — no DSH runtime, no network beyond 127.0.0.1."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.node = shutil.which("node")
+        if cls.node is None:
+            raise unittest.SkipTest("node not available")
+        cls.bridge = str(_PLUGIN / "bridge.js")
+        # Deterministic proxy mode: no OPENAI_*/ODR_* vars inherited.
+        cls.env = {k: v for k, v in os.environ.items()
+                   if not k.startswith(("OPENAI_", "ODR_"))}
+        # The bridge path rides in via env (argv positionals are swallowed by
+        # `node -e`).
+        cls.env["ODR_BRIDGE"] = cls.bridge
+
+    def _run(self, script: str) -> str:
+        node = self.node
+        assert node is not None  # setUpClass skips the class when node is absent
+        proc = subprocess.run(
+            [node, "--input-type=module", "-e", script, self.bridge],
+            capture_output=True, text=True, timeout=60, env=self.env)
+        self.assertEqual(proc.returncode, 0,
+                         f"node failed: {proc.stderr[-800:]}")
+        return proc.stdout
+
+    # Shared prologue: import the bridge (path via ODR_BRIDGE env) and wait
+    # for the proxy port.
+    _BOOT = (
+        "import { pathToFileURL } from 'node:url';\n"
+        "const mod = await import(pathToFileURL(process.env.ODR_BRIDGE).href);\n"
+        "for (let i = 0; i < 100 && !mod.state.port; i++)"
+        " await new Promise(r => setTimeout(r, 10));\n"
+    )
+
+    def test_child_env_points_child_at_proxy_unless_direct_url_set(self):
+        out = self._run(self._BOOT + """
+delete process.env.OPENAI_BASE_URL;
+process.env.ODR_LLM_PRESET = '';
+let env = mod.childEnv();
+console.log('PROXY_URL_OK=' + (env.OPENAI_BASE_URL === `http://127.0.0.1:${mod.state.port}/v1`));
+console.log('DUMMY_KEY=' + env.OPENAI_API_KEY);
+console.log('PRESET_DROPPED=' + !('ODR_LLM_PRESET' in env));
+process.env.OPENAI_BASE_URL = 'http://real:1234/v1';
+env = mod.childEnv();
+console.log('DIRECT_OK=' + (env.OPENAI_BASE_URL === 'http://real:1234/v1'));
+console.log('DIRECT_NO_DUMMY=' + (env.OPENAI_API_KEY !== 'dsh-bridge'));
+delete process.env.OPENAI_BASE_URL;
+""")
+        self.assertIn("PROXY_URL_OK=true", out)
+        self.assertIn("DUMMY_KEY=dsh-bridge", out)
+        self.assertIn("PRESET_DROPPED=true", out)
+        self.assertIn("DIRECT_OK=true", out)
+        self.assertIn("DIRECT_NO_DUMMY=true", out)
+
+    def test_proxy_serves_models_and_chat_from_ctx_llm(self):
+        out = self._run(self._BOOT + """
+mod.state.ctx = { llm: {
+  listProviders: async () => [{ id: 'main' }],
+  listModels: async () => [{ id: 'fake-model' }],
+  stream: async function* (options) {
+    console.log('CALL_OPTS=' + JSON.stringify({
+      provider: options.provider, model: options.model,
+      system: options.system ?? null, n: options.messages.length,
+      temperature: options.temperature ?? null,
+      maxTokens: options.maxTokens ?? null }));
+    yield { type: 'text-delta', index: 0, text: 'Hello ' };
+    yield { type: 'text-delta', index: 0, text: 'from fake llm' };
+    yield { type: 'finish', finish: { kind: 'stop' } };
+  },
+}};
+const base = `http://127.0.0.1:${mod.state.port}/v1`;
+const models = await (await fetch(`${base}/models`)).json();
+console.log('MODEL=' + models.data[0].id);
+const res = await fetch(`${base}/chat/completions`, {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ model: 'ignored', messages: [
+    { role: 'system', content: 'be brief' },
+    { role: 'user', content: 'hi' } ], temperature: 0.5, max_tokens: 64 }) });
+const body = await res.json();
+console.log('STATUS=' + res.status);
+console.log('CONTENT=' + body.choices[0].message.content);
+console.log('FINISH=' + body.choices[0].finish_reason);
+""")
+        self.assertIn("MODEL=fake-model", out)
+        self.assertIn("STATUS=200", out)
+        self.assertIn("CONTENT=Hello from fake llm", out)
+        self.assertIn("FINISH=stop", out)
+        opts = re.search(r"CALL_OPTS=(\{.*\})", out)
+        assert opts is not None, f"stream was never called; stdout={out!r}"
+        call = json.loads(opts.group(1))
+        self.assertEqual(call["provider"], "main")
+        self.assertEqual(call["model"], "fake-model")
+        self.assertEqual(call["system"], "be brief")
+        self.assertEqual(call["n"], 1)  # system folded out of messages
+        self.assertEqual(call["temperature"], 0.5)
+        self.assertEqual(call["maxTokens"], 64)
+
+    def test_proxy_reports_provider_model_and_llm_failures(self):
+        out = self._run(self._BOOT + """
+const base = `http://127.0.0.1:${mod.state.port}/v1`;
+const post = (llm) => { mod.state.ctx = { llm }; return fetch(
+  `${base}/chat/completions`, { method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }) }); };
+let res = await post({ listProviders: async () => [],
+  listModels: async () => [], stream: async function* () {} });
+console.log('NO_PROVIDER=' + res.status + ':' +
+  (await res.text()).includes('no LLM provider is registered'));
+res = await post({ listProviders: async () => [{ id: 'main' }],
+  listModels: async () => [], stream: async function* () {} });
+console.log('NO_MODEL=' + res.status + ':' +
+  (await res.text()).includes('cannot resolve a model'));
+res = await post({ listProviders: async () => [{ id: 'main' }],
+  listModels: async () => [{ id: 'm' }],
+  stream: async function* () {
+    yield { type: 'finish',
+            finish: { kind: 'error', failure: { message: 'boom', code: 'X' } } };
+  } });
+console.log('LLM_ERROR=' + res.status + ':' +
+  (await res.text()).includes('boom'));
+""")
+        self.assertIn("NO_PROVIDER=500:true", out)
+        self.assertIn("NO_MODEL=500:true", out)
+        self.assertIn("LLM_ERROR=502:true", out)
+
+
 if __name__ == "__main__":
     unittest.main()
+
