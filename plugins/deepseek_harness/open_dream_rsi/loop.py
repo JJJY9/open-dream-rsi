@@ -1048,6 +1048,50 @@ class AutoRSIRuntime:
 
         _paired(task, candidates)
         verdict = lesson_gate_verdict(results)
+        # Confirmation round: a single paired win can be decoder noise, and
+        # low-risk banal lessons win coin flips precisely because they rarely
+        # hurt. Re-pair only the round-one survivors — with-lesson arm only,
+        # paired against the round-one baseline (same counterfactual
+        # snapshot), so replication costs half of a full second round. A
+        # candidate promotes only with a STRICT win (solved with, failed
+        # without) in EVERY recorded round; anything less is proven noise.
+        # Without budget (or snapshot) for the confirmation the lesson stays
+        # staging and _drain_staging retries it on a later cycle: activation
+        # is never earned on one round of evidence.
+        if verdict.promoted:
+            round1_rejected = [k for k in results
+                               if k not in set(verdict.promoted)]
+            confirm = [l for l in candidates
+                       if lesson_key(l) in set(verdict.promoted)]
+            snap = self._gate_snapshots.get(task.task_id)
+            if (snap is not None
+                    and self.api_calls_used + 2 * len(confirm)
+                    <= self.api_call_budget):
+                for l in confirm:
+                    key = lesson_key(l)
+                    with_it, calls = self._gate_attempt(
+                        task, format_lessons([l]), snap,
+                        depth=GATE_ROLLOUT_DEPTH)
+                    self.api_calls_used += calls
+                    report.api_calls += calls
+                    baseline = (results[key][-1][1]
+                                if results.get(key) else False)
+                    results[key].append((with_it, baseline))
+                verdict = lesson_gate_verdict(results)
+                strict = [k for k in verdict.promoted
+                          if results.get(k)
+                          and all(w and not wo
+                                  for w, wo in results[k])]
+                verdict.rejected = (verdict.rejected
+                                    + [k for k in verdict.promoted
+                                       if k not in set(strict)]
+                                    + [k for k in round1_rejected
+                                       if k not in set(verdict.rejected)])
+                verdict.promoted = strict
+            else:
+                # no budget for confirmation -> no promotion this cycle;
+                # _drain_staging gives the lesson another chance later
+                verdict.promoted = []
         # Guard the survivors, not the rejects: spend leftover budget
         # re-pairing only what already promoted.
         if sibling is not None and verdict.promoted:

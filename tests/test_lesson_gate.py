@@ -159,3 +159,51 @@ class TestLoopGate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoiseClient(TrackingClient):
+    """Solves WITH the lesson exactly once (first gate arm), then never.
+
+    Models the banal-lesson failure mode: a low-risk "do less work" hint
+    wins one paired comparison by decoder noise because it rarely hurts.
+    """
+
+    def __init__(self, solve_marker, lesson_json=None):
+        super().__init__(solve_marker, lesson_json)
+        self.solved_once = False
+
+    def chat(self, messages, model=None, temperature=0.7, max_tokens=1024):
+        user = messages[-1]["content"]
+        if "knowledge curator" in (messages[0]["content"] or ""):
+            return self.lesson_json or "[]"
+        if self.solve_marker in user and not self.solved_once:
+            self.solved_once = True
+            return "```python\ndef median(xs):\n    return sorted(xs)[len(xs)//2]\n```"
+        return "```python\ndef median(xs):\n    return 0\n```"
+
+
+class TestConfirmationRound(unittest.TestCase):
+    """A round-one win alone must not activate a lesson (noise guard)."""
+
+    def _tasks(self):
+        tests = [{"call": "median([3,1,2])", "expected": 2}]
+        return [Task(task_id="t1", category="c", prompt="compute median",
+                     tests=tests, max_attempts=2),
+                Task(task_id="t2", category="c", prompt="compute median",
+                     tests=tests, max_attempts=2)]
+
+    def _lesson_json(self):
+        import json as _json
+        return "```json\n[%s]\n```" % _json.dumps(GOOD_ITEM)
+
+    def test_single_round_win_is_not_enough(self):
+        client = NoiseClient("middle values", lesson_json=self._lesson_json())
+        rt = AutoRSIRuntime(client=client,
+                            memory=DreamMemory(tempfile.mkdtemp()),
+                            tasks=self._tasks(), api_call_budget=40,
+                            max_tokens=256, enable_policy_code=False,
+                            enable_thoughts=False)
+        rt.run_once()
+        entries = rt.memory.get_lessons("c")
+        self.assertFalse(any(l.get("status") == "active" for l in entries),
+                         "noise round-1 win must never reach active")
