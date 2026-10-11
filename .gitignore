@@ -10,3 +10,4 @@ dist/
 paper/main.aux
 paper/main.log
 paper/main.out
+*.tgz
