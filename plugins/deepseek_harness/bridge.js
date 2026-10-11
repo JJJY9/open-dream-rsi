@@ -48,28 +48,39 @@ function childEnv() {
   return env;
 }
 
-// Resolve the route once per process: the first provider registered in the
-// harness and (unless ODR_LLM_MODEL is set and listed) its first catalog
-// model — i.e. "the model this harness is configured with".
+// Resolve the route once per process, in order of intent: ODR_LLM_MODEL pins
+// the model; otherwise the harness's own agent default route
+// (ctx.agentDefaultModel — "the model this harness is configured with");
+// otherwise the first registered provider plus its first catalog model.
 async function pickRoute() {
   if (state.model) return { provider: state.provider, model: state.model };
   if (!state.ctx?.llm) {
     throw new Error("dsh-llm service is not available on the plugin context");
   }
-  const providers = await state.ctx.llm.listProviders();
-  if (!providers.length) {
-    throw new Error(
-      "no LLM provider is registered in the harness (ctx.llm.listProviders() is empty) — "
-      + "configure a model in DSH settings, or export OPENAI_BASE_URL before starting dsh "
-      + "to point ODR at an endpoint directly",
-    );
+  let provider = null;
+  const fallback = state.ctx.agentDefaultModel;
+  if (fallback) {
+    provider = (await fallback.provider) ?? null;
   }
-  const provider = providers[0].id;
+  if (!provider) {
+    const providers = await state.ctx.llm.listProviders();
+    if (!providers.length) {
+      throw new Error(
+        "no LLM provider is registered in the harness (ctx.llm.listProviders() is empty) — "
+        + "configure a model in DSH settings, or export OPENAI_BASE_URL before starting dsh "
+        + "to point ODR at an endpoint directly",
+      );
+    }
+    provider = providers[0].id;
+  }
   let model = null;
   const wanted = process.env.ODR_LLM_MODEL;
   if (wanted) {
     model = wanted;
-  } else {
+  } else if (fallback) {
+    model = (await fallback.model) ?? null;
+  }
+  if (!model) {
     const models = await state.ctx.llm.listModels(provider).catch(() => []);
     model = models[0]?.id ?? null;
   }

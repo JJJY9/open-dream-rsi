@@ -93,9 +93,11 @@ The bundle needs **no LLM configuration at all**. The bridge runs an
 OpenAI-compatible proxy inside the harness process; the Python child is
 pointed at it via `OPENAI_BASE_URL=http://127.0.0.1:<port>/v1` and every
 `/v1/chat/completions` call is served by the harness's own configured model
-through the dsh-llm service (`ctx.llm.stream`). The model is resolved once:
-the first registered provider, and — unless `ODR_LLM_MODEL` is set — its
-first catalog model (`ctx.llm.listModels`). `GET /v1/models` reports that
+through the dsh-llm service (`ctx.llm.stream`). The route is resolved once,
+in order of intent: `ODR_LLM_MODEL` pins the model; otherwise the harness's
+own agent default route (`ctx.agentDefaultModel`); otherwise the first
+registered provider plus its first catalog model (`ctx.llm.listModels`).
+`GET /v1/models` reports that
 model, so ODR's auto-detection picks it up.
 
 Escape hatch: if the harness process already has a real `OPENAI_BASE_URL`

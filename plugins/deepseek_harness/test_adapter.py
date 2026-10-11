@@ -255,11 +255,24 @@ const body = await res.json();
 console.log('STATUS=' + res.status);
 console.log('CONTENT=' + body.choices[0].message.content);
 console.log('FINISH=' + body.choices[0].finish_reason);
+// The harness's own agent default route, once present, wins over the
+// first-registered-provider fallback.
+mod.state.model = null;
+mod.state.ctx.agentDefaultModel = {
+  get provider() { return 'agent-route'; },
+  get model() { return 'agent-model'; },
+};
+const res2 = await fetch(`${base}/chat/completions`, {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }) });
+console.log('AGENT_ROUTE=' + (await res2.json()).model);
+delete mod.state.ctx.agentDefaultModel;
 """)
         self.assertIn("MODEL=fake-model", out)
         self.assertIn("STATUS=200", out)
         self.assertIn("CONTENT=Hello from fake llm", out)
         self.assertIn("FINISH=stop", out)
+        self.assertIn("AGENT_ROUTE=agent-model", out)
         opts = re.search(r"CALL_OPTS=(\{.*\})", out)
         assert opts is not None, f"stream was never called; stdout={out!r}"
         call = json.loads(opts.group(1))
