@@ -57,10 +57,16 @@ async function pickRoute() {
   if (!state.ctx?.llm) {
     throw new Error("dsh-llm service is not available on the plugin context");
   }
+  // The harness's agent default selection (ctx.agentDefaultModel) is the
+  // route the harness itself chats on; its provider/model are Volatile
+  // values, read through currentSelection().
   let provider = null;
+  let defaultModel = null;
   const fallback = state.ctx.agentDefaultModel;
-  if (fallback) {
-    provider = (await fallback.provider) ?? null;
+  if (fallback?.currentSelection) {
+    const selection = fallback.currentSelection();
+    provider = selection?.provider ?? null;
+    defaultModel = selection?.model ?? null;
   }
   if (!provider) {
     const providers = await state.ctx.llm.listProviders();
@@ -73,13 +79,7 @@ async function pickRoute() {
     }
     provider = providers[0].id;
   }
-  let model = null;
-  const wanted = process.env.ODR_LLM_MODEL;
-  if (wanted) {
-    model = wanted;
-  } else if (fallback) {
-    model = (await fallback.model) ?? null;
-  }
+  let model = process.env.ODR_LLM_MODEL || defaultModel;
   if (!model) {
     const models = await state.ctx.llm.listModels(provider).catch(() => []);
     model = models[0]?.id ?? null;

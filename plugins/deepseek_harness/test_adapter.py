@@ -259,8 +259,7 @@ console.log('FINISH=' + body.choices[0].finish_reason);
 // first-registered-provider fallback.
 mod.state.model = null;
 mod.state.ctx.agentDefaultModel = {
-  get provider() { return 'agent-route'; },
-  get model() { return 'agent-model'; },
+  currentSelection: () => ({ provider: 'agent-route', model: 'agent-model' }),
 };
 const res2 = await fetch(`${base}/chat/completions`, {
   method: 'POST', headers: { 'content-type': 'application/json' },
