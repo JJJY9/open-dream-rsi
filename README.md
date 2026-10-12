@@ -414,7 +414,10 @@ the Cursor login — see **[docs/integrations.md → Cursor](docs/integrations.m
 Since 0.3.0 the default zero-proxy brain is the `cursor-agent` provider: the
 headless Cursor CLI authenticated by your Cursor login — no API key, no
 proxy (`dream --provider cursor-agent`). A machine without the CLI defers
-dream sessions instead of failing.
+dream sessions instead of failing. Install the CLI:
+`irm 'https://cursor.com/install?win32=true' | iex` (Windows) or
+`curl https://cursor.com/install -fsS | bash` (macOS/Linux/WSL); verify
+with `cursor-agent --version` in a fresh terminal.
 
 Precedence is always: explicit overrides → environment → **endpoint model
 discovery** (first id from `GET /v1/models`) → preset defaults. A redeployed

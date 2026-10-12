@@ -44,7 +44,7 @@ the command line).
 python plugins/cursor/install.py
 # options: --memory D:/odr-mem  --python C:\path\venv\Scripts\python.exe
 #          --provider cursor-agent (default) | openai | local | goose
-#          --env-file C:\Users\me\odr-env.list
+#          --env-file C:\Users\me\odr-env.list   (openai/local only)
 ```
 
 The installer:
@@ -74,10 +74,16 @@ watched and reloaded, but a restart is the reliable first activation).
 
 * Cursor with hooks support (Cursor 2.4+ for `postToolUse`; `sessionEnd`
   fired on conversation end),
-* for the default brain: the `cursor-agent` CLI on PATH (Cursor CLI,
-  authenticated by your Cursor login; Windows npm shims — `.cmd` — are
-  wrapped automatically). Any OpenAI-compatible endpoint works instead via
-  `--provider` + `--env-file`,
+* for the default brain: the `cursor-agent` CLI, authenticated by your
+  Cursor login (Windows `.cmd` shims are wrapped automatically). Install:
+
+  ```powershell
+  irm 'https://cursor.com/install?win32=true' | iex   # Windows PowerShell
+  # curl https://cursor.com/install -fsS | bash       # macOS / Linux / WSL
+  ```
+
+  Verify: `cursor-agent --version` (in a NEW terminal — the installer adds
+  `%LOCALAPPDATA%\cursor-agent` to the user PATH).
 * the open-dream-rsi checkout importable by the interpreter passed via
   `--python` (or the default `sys.executable`),
 * no admin approval beyond hooks: project/user hooks are a user-level

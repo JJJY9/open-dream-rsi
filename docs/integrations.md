@@ -391,8 +391,8 @@ One command wires it (run inside the open-dream-rsi checkout):
 
 ```bash
 python plugins/cursor/install.py
-# options: --memory D:/odr-mem  --provider local
-#          --env-file D:/odr/env.list   (OPENAI_BASE_URL / OPENAI_API_KEY ...)
+# options: --memory D:/odr-mem  --provider cursor-agent (default) | openai | local | goose
+#          --env-file D:/odr/env.list   (openai/local only: OPENAI_BASE_URL / OPENAI_API_KEY ...)
 ```
 
 The installer merges three entries into `~/.cursor/hooks.json` (existing
@@ -424,7 +424,11 @@ dreamer runs the headless Cursor CLI (`cursor-agent -p --force
 --output-format text`) on the user's own login — no API key, no proxy; the
 model is whatever the user's Cursor uses (`--model` / `ODR_LLM_MODEL` to
 pin). A machine without the CLI is safe: the dream defers those sessions
-(never burns evidence). The older local-proxy route remains:
+(never burns evidence). Install the CLI:
+`irm 'https://cursor.com/install?win32=true' | iex` (Windows) or
+`curl https://cursor.com/install -fsS | bash` (macOS/Linux/WSL); verify
+with `cursor-agent --version` in a fresh terminal. The older local-proxy
+route remains:
 
 ```bash
 npm i -g cursor-openai-api
