@@ -39,6 +39,16 @@ def _load_env_file(path: "str | None") -> dict:
     return out
 
 
+def _log_note(log: Path, line: str) -> None:
+    """Best-effort note into dream.log — a config gap must never crash the
+    hook (the installer may reference a file the user has not created)."""
+    try:
+        with open(log, "ab") as fh:
+            fh.write(f"[dream-hook] {line}\n".encode())
+    except Exception:
+        pass
+
+
 def main(argv: "list[str] | None" = None) -> int:
     try:
         json.loads(sys.stdin.read() or "{}")  # consume the event; content unused
@@ -64,7 +74,14 @@ def main(argv: "list[str] | None" = None) -> int:
     log = Path(memory) / "dream.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     child_env = dict(os.environ)
-    child_env.update(_load_env_file(opts.env_file))
+    if opts.env_file:
+        if Path(opts.env_file).exists():
+            child_env.update(_load_env_file(opts.env_file))
+        else:
+            # Not a crash: dream runs on the inherited environment (the
+            # installer may reference a file that does not exist yet).
+            _log_note(log, f"env file missing: {opts.env_file} — "
+                           f"running on the inherited environment only")
     child_argv = [python, "-m", "open_dream_rsi",
                   "--memory", memory, "dream", "--source", "cursor"]
     if opts.provider:

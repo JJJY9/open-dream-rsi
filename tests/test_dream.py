@@ -43,11 +43,20 @@ def _hermes_db(path: Path, n_sessions: int = 3, fail: bool = True) -> None:
 
 
 class _NoLLM:
-    """Client that fails every call — forces distill to reject cleanly and
-    keeps tests free of LLM traffic."""
+    """Client whose chat always raises — a configured-but-dead endpoint:
+    distill surfaces an 'llm error' and the session is DEFERRED (stays
+    unseen) instead of being consumed."""
 
     def chat(self, *a, **k):
         raise RuntimeError("no llm in tests")
+
+
+class _JunkLLM:
+    """Client that replies with non-JSON: the curator rejects the CONTENT,
+    so the session is consumed (seen) — the contrast to _NoLLM."""
+
+    def chat(self, *a, **k):
+        return "not a json array"
 
 
 class TestDreamOnce(unittest.TestCase):
@@ -90,7 +99,7 @@ class TestDreamOnce(unittest.TestCase):
     def test_probe_tasks_queued_from_failure_sessions(self):
         from open_dream_rsi.memory import DreamMemory
         mem = DreamMemory(self.mem)
-        ingest_sessions(mem, self.db, client=_NoLLM())
+        ingest_sessions(mem, self.db, client=_JunkLLM())
         tp = self.mem / "tasks.json"
         self.assertTrue(tp.exists())
         tasks = json.loads(tp.read_text())
@@ -99,29 +108,43 @@ class TestDreamOnce(unittest.TestCase):
         self.assertEqual(probes[0]["max_attempts"], 1)
         self.assertEqual(probes[0]["prompt"], "fix this broken thing")
         # idempotent: a second ingest adds no duplicates
-        ingest_sessions(mem, self.db, client=_NoLLM())
+        ingest_sessions(mem, self.db, client=_JunkLLM())
         self.assertEqual(len(json.loads(tp.read_text())), 3)
 
     def test_ingest_skips_seen_sessions(self):
         from open_dream_rsi.memory import DreamMemory
         mem = DreamMemory(self.mem)
-        # a live-shaped client (distillation may fail; sessions are still
-        # accounted as seen). client=None means "no endpoint" -> sessions
-        # stay unseen until a cycle can actually distil them.
-        r1 = ingest_sessions(mem, self.db, client=_NoLLM())
+        # a content-rejecting client (no JSON in the reply) consumes the
+        # session: the curator judged the reply, so re-offering it adds
+        # nothing.
+        r1 = ingest_sessions(mem, self.db, client=_JunkLLM())
         self.assertEqual(r1["new"], 3)
-        r2 = ingest_sessions(mem, self.db, client=_NoLLM())
+        r2 = ingest_sessions(mem, self.db, client=_JunkLLM())
         self.assertEqual(r2["new"], 0)
+        # a transport-failing client (dead endpoint) defers instead: the
+        # evidence stays unseen and is offered to the next live cycle.
         fresh = Path(tempfile.mkdtemp()) / "mem2"
         fresh.mkdir()
-        r3 = ingest_sessions(DreamMemory(fresh), self.db, client=None)
-        self.assertEqual(r3["new"], 0)  # offline never marks evidence seen
+        r3 = ingest_sessions(DreamMemory(fresh), self.db, client=_NoLLM())
+        self.assertEqual(r3["deferred"], 3)
+        self.assertEqual(r3["probes"], 0)
+        tasks = (json.loads((fresh / "tasks.json").read_text())
+                 if (fresh / "tasks.json").exists() else [])
+        self.assertEqual(tasks, [])
+        r4 = ingest_sessions(DreamMemory(fresh), self.db, client=_NoLLM())
+        self.assertEqual(r4["new"], 3)  # still unseen — not consumed
+        # client=None means "no endpoint" -> sessions stay unseen until a
+        # cycle can actually distil them.
+        fresh2 = Path(tempfile.mkdtemp()) / "mem3"
+        fresh2.mkdir()
+        r5 = ingest_sessions(DreamMemory(fresh2), self.db, client=None)
+        self.assertEqual(r5["new"], 0)  # offline never marks evidence seen
 
     def test_maintenance_tier_when_no_new_evidence(self):
         # first full run establishes last_full_dream and accounts the
         # sessions; an immediate second call must be maintenance (budget 0)
-        dream_once(self.mem, sessions_db=self.db, client=_NoLLM())
-        report = dream_once(self.mem, sessions_db=self.db, client=_NoLLM())
+        dream_once(self.mem, sessions_db=self.db, client=_JunkLLM())
+        report = dream_once(self.mem, sessions_db=self.db, client=_JunkLLM())
         self.assertEqual(report["tier"], "maintenance")
 
 
@@ -157,7 +180,7 @@ class CursorIngestTests(unittest.TestCase):
 
     def test_dream_once_ingests_cursor_store(self):
         report = dream_once(self.mem, sessions_db=self._cursor_store(),
-                            session_source="cursor", client=_NoLLM())
+                            session_source="cursor", client=_JunkLLM())
         self.assertFalse(report["skipped"])
         self.assertEqual(report["ingest"]["new"], 1)
         # probe task queued exactly like the hermes path does
@@ -169,10 +192,10 @@ class CursorIngestTests(unittest.TestCase):
         from open_dream_rsi.memory import DreamMemory
         store = self._cursor_store()
         r1 = ingest_sessions(DreamMemory(self.mem), store, source="cursor",
-                             client=_NoLLM())
+                             client=_JunkLLM())
         self.assertEqual(r1["new"], 1)
         r2 = ingest_sessions(DreamMemory(self.mem), store, source="cursor",
-                             client=_NoLLM())
+                             client=_JunkLLM())
         self.assertEqual(r2["new"], 0)
 
     def test_unknown_source_raises(self):

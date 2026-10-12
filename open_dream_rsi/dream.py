@@ -155,7 +155,8 @@ def ingest_sessions(memory, sessions_db: "str | Path", *,
     reads the Cursor ``User`` dir (``state.vscdb``) directly — no MCP
     server involved, so this also works where MCP is blocked by policy.
 
-    Returns {'new': n_sessions, 'added': n_lessons, 'probes': n_tasks}.
+    Returns {'new': n_sessions, 'added': n_lessons, 'probes': n_tasks,
+             'deferred': n_deferred (endpoint failed; session left unseen)}.
     Sessions already processed are skipped — transcripts stay in the
     source store, so skipping a cycle loses nothing.
     """
@@ -188,6 +189,7 @@ def ingest_sessions(memory, sessions_db: "str | Path", *,
         # zero new so the caller stays in the cheap maintenance tier.
         return {"new": 0, "added": 0, "deferred": len(new)}
     added_total = 0
+    deferred = 0
     probes: List[Dict[str, Any]] = []
     for ep in new:
         seen.add(ep.session_id)
@@ -195,11 +197,23 @@ def ingest_sessions(memory, sessions_db: "str | Path", *,
         if not failures:
             continue
         cat = category or (Path(ep.cwd).name if ep.cwd else ep.source)
+        distilled, err = curator.distill(cat, ep.title or cat, failures,
+                                         memory.get_lessons(cat))
+        if err and err.startswith("llm error"):
+            # Transport failure (connect/HTTP/response shape): this session
+            # was never actually evaluated, so do NOT consume it — leave it
+            # unseen for the next cycle with a live endpoint. Consuming here
+            # would silently burn the evidence (a dead endpoint eats the
+            # backlog one session per fire, and the tier stays full).
+            seen.discard(ep.session_id)
+            deferred += 1
+            memory.log_event("lesson_deferred", source=ep.source,
+                             session_id=ep.session_id,
+                             reason=err[:300])
+            continue
         probe = _probe_task(ep, cat)
         if probe is not None:
             probes.append(probe)
-        distilled, err = curator.distill(cat, ep.title or cat, failures,
-                                         memory.get_lessons(cat))
         if err or not distilled:
             memory.log_event("lesson_rejected", source=ep.source,
                              session_id=ep.session_id,
@@ -217,7 +231,8 @@ def ingest_sessions(memory, sessions_db: "str | Path", *,
     n_probes = _append_probe_tasks(root, probes)
     if n_probes:
         memory.log_event("probe_tasks_queued", count=n_probes)
-    return {"new": len(new), "added": added_total, "probes": n_probes}
+    return {"new": len(new), "added": added_total, "probes": n_probes,
+            "deferred": deferred}
 
 
 # -- the seam ------------------------------------------------------------------

@@ -5,6 +5,10 @@ the Dream-RSI loop: hooks and rules are a separate surface, and everything
 the loop needs travels through files (`tasks.json`, the memory dir), never
 through MCP.
 
+> **Not a Cursor Plugin.** There is no `.cursor-plugin/plugin.json` in this
+> repository, so Cursor's "From github repository" import loads nothing
+> here — install by running `install.py` from your checkout.
+
 ```
 plugins/cursor/
 ├── install.py                     one command: wires hooks + rule
