@@ -702,6 +702,39 @@ The next `odr loop` cycle gates the staging entries exactly like
 loop-collected ones; `odr artifacts --type lesson --history` shows the
 lifecycle events behind every activation.
 
+### Backfill: re-distilling burned sessions
+
+A dream cycle consumes a host session the first time it distills it. While
+the endpoint was broken (404 churn, connection refused, empty payloads), a
+session could be marked seen while producing ZERO lessons: `seen_sessions`
+grew, the knowledge base did not — the evidence was burned. Since 0.3.0
+transport failures defer sessions instead of consuming them, but sessions
+burned by the old behaviour stay invisible. `scripts/backfill_history.py`
+audits that damage and repairs it:
+
+```bash
+# damage report (dry-run; reads only session ids + cwd, never transcripts):
+python scripts/backfill_history.py plan --memory .dream_rsi \
+    --state-db ~/.hermes/state.db
+
+# make burned sessions unseen again (timestamped backup written first):
+python scripts/backfill_history.py requeue --memory .dream_rsi \
+    --state-db ~/.hermes/state.db --category radoskoppl --apply
+
+# trim the replay-probe backlog to the newest N (manual tasks always kept):
+python scripts/backfill_history.py prune-probes 60 --memory .dream_rsi --apply
+
+# run cycles back-to-back through the real CLI (the dream lock collapses
+# overlaps; transport failures defer, never burn):
+python scripts/backfill_history.py drain 5 --memory .dream_rsi \
+    --state-db ~/.hermes/state.db --provider local --budget 200
+```
+
+A session counts as burned when it is marked seen, still present in the
+store, and never produced a single lesson. Rejections meaning "no failure
+evidence in this transcript" are excluded — requeueing those would loop
+forever with zero yield. Tests: `tests/test_backfill_history.py`.
+
 ### From Cursor chats
 
 Cursor keeps conversations in `globalStorage/state.vscdb` (Linux:
