@@ -641,6 +641,24 @@ calls/solve ≤ 5) spends zero curator/gate calls where the cold baseline
 already wins. Guidance pays a perturbation tax — the loop only pays it
 where there is measurable headroom to spend it against.
 
+### Verdicts must be replayable (why lessons anchor on tool calls)
+
+Tool results are the only evidence class with cheap, objective ground
+truth — exit code, timeout, empty payload, retrieved content — so the
+paired-replay gate can re-execute the same moment and decide. Prose
+quality ("was this plan good?") has no such oracle: an LLM judge cannot
+be re-run into a decision, only re-sampled into noise — and that noise
+is measured, not hypothetical. Trusting freshly distilled lessons
+*without* replay dropped a greedy solver from 18/20 to 6/20, and the one
+noise-promoted lesson that ever reached production (an anodyne "answer
+more directly") won its coin flip precisely because it rarely hurt —
+hence the confirmed-strict-win promotion. The loop therefore learns
+where truth is cheap and treats everything else as unevidenced material,
+not knowledge. The strongest non-tool signal — the user's own in-session
+corrections — is deliberately not auto-imported yet; it is tracked as
+the next first-class channel under the same staging → replay-gate
+discipline.
+
 ---
 
 ## Learning vs lifecycle vs history
