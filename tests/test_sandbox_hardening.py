@@ -180,5 +180,72 @@ class IncumbentReevaluationTest(unittest.TestCase):
         self.assertEqual(report.improvements, [])
 
 
+class PreexecResilienceTest(unittest.TestCase):
+    """A restrictive environment (hard rlimit below the request) must not
+    kill the spawn — the live failure was ``Exception occurred in
+    preexec_fn`` aborting whole improvement cycles."""
+
+    def _limits(self):
+        from open_dream_rsi.sandbox import _make_preexec
+        return _make_preexec(10.0)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "POSIX rlimits")
+    def test_preexec_clamps_soft_to_hard_instead_of_raising(self):
+        import resource
+        from unittest.mock import patch
+
+        recorded = []
+        hard = 64 * 1024 * 1024  # 64 MB hard ceiling, below the 512 MB ask
+        with patch.object(resource, "getrlimit", lambda limit: (1024, hard)), \
+             patch.object(resource, "setrlimit",
+                          lambda limit, pair: recorded.append((limit, pair))):
+            self._limits()()
+        as_call = next(p for l, p in recorded if l == resource.RLIMIT_AS)
+        self.assertEqual(as_call, (hard, hard))
+        cpu_call = next(p for l, p in recorded if l == resource.RLIMIT_CPU)
+        self.assertLessEqual(cpu_call[0], cpu_call[1])
+        nproc_call = next(p for l, p in recorded if l == resource.RLIMIT_NPROC)
+        self.assertGreaterEqual(nproc_call[0], 512)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "POSIX rlimits")
+    def test_preexec_survives_setrlimit_failure(self):
+        import resource
+        from unittest.mock import patch
+
+        with patch.object(resource, "getrlimit", lambda limit: (1024, 4096)), \
+             patch.object(resource, "setrlimit",
+                          side_effect=OSError(1, "operation not permitted")):
+            self._limits()()  # must not raise
+
+    def test_codeverifier_reports_spawn_failure(self):
+        import subprocess
+        from unittest.mock import patch
+        from open_dream_rsi import tools
+
+        err = subprocess.SubprocessError("Exception occurred in preexec_fn")
+        with patch.object(tools, "run_isolated", side_effect=err):
+            result = tools.CodeVerifier().run("def add(a, b):\n    return a + b\n",
+                                              [{"call": "add(2, 3)", "expected": 5}])
+        self.assertFalse(result.ok)
+        self.assertIn("sandbox spawn failed", str(result.detail))
+        with patch.object(tools, "run_isolated", side_effect=err):
+            report = tools.CodeVerifier().smoke_run("pass")
+        self.assertFalse(report["ok"])
+        self.assertIn("sandbox spawn failed", report["error"])
+
+    def test_policy_sandbox_reports_spawn_failure(self):
+        import subprocess
+        from unittest.mock import patch
+        from open_dream_rsi.core import policygen
+
+        err = subprocess.SubprocessError("Exception occurred in preexec_fn")
+        policy = ("def choose_action(frontier, step):\n"
+                  "    return None\n")
+        with patch.object(policygen, "run_isolated", side_effect=err):
+            run = policygen.PolicySandbox().choose(policy, [], 1)
+        self.assertIsNone(run.choice)
+        self.assertIn("sandbox spawn failed", run.error)
+
+
 if __name__ == "__main__":
     unittest.main()

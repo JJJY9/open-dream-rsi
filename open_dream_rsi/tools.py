@@ -101,6 +101,12 @@ class CodeVerifier:
         except subprocess.TimeoutExpired:
             return {"ok": False, "error": "execution timed out",
                     "defined": [], "stdout": ""}
+        except subprocess.SubprocessError as exc:
+            # Restrictive environments can fail the spawn itself (e.g.
+            # "Exception occurred in preexec_fn" under a low hard rlimit):
+            # report sandbox evidence instead of killing the whole cycle.
+            return {"ok": False, "error": f"sandbox spawn failed: {exc}",
+                    "defined": [], "stdout": ""}
         finally:
             Path(path).unlink(missing_ok=True)
         line = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
@@ -129,6 +135,10 @@ class CodeVerifier:
             )
         except subprocess.TimeoutExpired:
             return ToolResult(False, 0.0, "execution timed out")
+        except subprocess.SubprocessError as exc:
+            # See smoke_run: a failed spawn is sandbox evidence, not a
+            # crashed cycle.
+            return ToolResult(False, 0.0, f"sandbox spawn failed: {exc}")
         finally:
             Path(path).unlink(missing_ok=True)
 

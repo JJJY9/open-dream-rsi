@@ -40,8 +40,8 @@ directory holding your `tasks.json`:
 
 ```bash
 # from the npm registry, a tarball, a checkout, or straight from GitHub — pick one:
-dsh plugin --profile <name> add dsh-open-dream-rsi            # or pin: dsh-open-dream-rsi@0.2.0
-dsh plugin --profile <name> add /path/to/dsh-open-dream-rsi-0.2.0.tgz
+dsh plugin --profile <name> add dsh-open-dream-rsi            # or pin: dsh-open-dream-rsi@0.2.1
+dsh plugin --profile <name> add /path/to/dsh-open-dream-rsi-0.2.1.tgz
 dsh plugin --profile <name> add /path/to/open-dream-rsi/plugins/deepseek_harness
 dsh plugin --profile <name> add github:patrykorwat/open-dream-rsi#path:plugins/deepseek_harness
 

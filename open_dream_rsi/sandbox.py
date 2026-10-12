@@ -57,21 +57,51 @@ def _memory_mb() -> int:
 
 
 def _make_preexec(timeout: float):
-    """preexec_fn: RLIMIT_AS / RLIMIT_CPU / RLIMIT_NPROC for the child."""
+    """preexec_fn: RLIMIT_AS / RLIMIT_CPU / RLIMIT_NPROC for the child.
+
+    Best-effort by design: in restrictive environments (a hard rlimit below
+    the request — common for daemons and desktop sandboxes) ``setrlimit``
+    would raise and kill the spawn with ``Exception occurred in
+    preexec_fn``, so each limit is clamped to the hard ceiling and applied
+    only when it can be.
+    """
     import resource
 
     mem_bytes = _memory_mb() * 1024 * 1024
     cpu_soft = max(2, int(timeout) + 1)
 
-    def _limits() -> None:  # runs in the forked child only
-        resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
-        resource.setrlimit(resource.RLIMIT_CPU, (cpu_soft, cpu_soft + 1))
+    def _apply(limit: int, soft: int, hard_extra: Optional[int]) -> bool:
+        """Set one rlimit, clamped to the environment's hard ceiling."""
         try:
-            # RLIMIT_NPROC counts THREADS of this uid (shared with the
-            # parent), so the floor must sit ABOVE the uid's current task
-            # count or every fork fails with EAGAIN. Count threads via
-            # /proc, fall back to the static floor where /proc is absent.
-            existing = 0
+            _, hard = resource.getrlimit(limit)
+        except (ValueError, OSError):
+            hard = resource.RLIM_INFINITY
+        if hard == 0:
+            # The environment forbids this resource entirely; applying
+            # soft=0 would insta-kill the child, so skip it.
+            return False
+        if hard != resource.RLIM_INFINITY:
+            soft = min(soft, hard)
+        if hard_extra is not None:
+            hard = (soft + hard_extra) if hard == resource.RLIM_INFINITY \
+                else min(hard, soft + hard_extra)
+        try:
+            resource.setrlimit(limit, (soft, hard))
+        except (ValueError, OSError):
+            return False
+        return True
+
+    def _limits() -> None:  # runs in the forked child only
+        # Each limit is best-effort: degrade to fewer enforced limits
+        # rather than kill the spawn.
+        _apply(resource.RLIMIT_AS, mem_bytes, None)
+        _apply(resource.RLIMIT_CPU, cpu_soft, 1)
+        # RLIMIT_NPROC counts THREADS of this uid (shared with the parent),
+        # so the floor must sit ABOVE the uid's current task count or every
+        # fork fails with EAGAIN. Count threads via /proc, fall back to the
+        # static floor where /proc is absent.
+        existing = 0
+        try:
             for entry in os.listdir("/proc"):
                 if not entry.isdigit():
                     continue
@@ -87,10 +117,7 @@ def _make_preexec(timeout: float):
         except OSError:
             existing = 0
         cap = max(MAX_PROCS, existing + 64)
-        try:
-            resource.setrlimit(resource.RLIMIT_NPROC, (cap, cap))
-        except (ValueError, OSError):
-            pass  # platform without NPROC limits
+        _apply(resource.RLIMIT_NPROC, cap, None)
 
     return _limits
 

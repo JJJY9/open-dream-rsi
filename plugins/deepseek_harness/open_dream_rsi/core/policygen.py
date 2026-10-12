@@ -302,6 +302,10 @@ class PolicySandbox:
             )
         except subprocess.TimeoutExpired:
             return PolicyRun(None, "policy execution timed out")
+        except subprocess.SubprocessError as exc:
+            # A failed spawn (e.g. "Exception occurred in preexec_fn" under a
+            # low hard rlimit) must not kill the whole cycle.
+            return PolicyRun(None, f"sandbox spawn failed: {exc}")
         finally:
             for p in (src_path, fr_path, harness_path):
                 p.unlink(missing_ok=True)
@@ -339,6 +343,10 @@ class PolicySandbox:
             )
         except subprocess.TimeoutExpired:
             return None, [], 0, "policy rollout timed out"
+        except subprocess.SubprocessError as exc:
+            # See choose(): a failed spawn is an errored rollout, not a
+            # crashed cycle.
+            return None, [], 0, f"sandbox spawn failed: {exc}"
         finally:
             for p in (src_path, world_path, harness_path):
                 p.unlink(missing_ok=True)
