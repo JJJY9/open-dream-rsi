@@ -4,7 +4,8 @@ Open Dream-RSI does not require a specific provider — any endpoint that
 implements the OpenAI protocol (``POST {base_url}/chat/completions``) works:
 
 * OpenAI                            -> https://api.openai.com/v1
-* Cursor Models API                 -> https://api2.cursor.sh
+* Cursor (via a local proxy over    -> http://127.0.0.1:3000/v1
+  the Cursor login, e.g. cursor-openai-api)
 * local vLLM / Ollama / LM Studio   -> http://127.0.0.1:8000/v1 etc.
 
 The client uses only the standard library (urllib), so the core package
@@ -63,10 +64,16 @@ ENDPOINT_PRESETS: Dict[str, Dict[str, str]] = {
         "api_key_env": "OPENAI_API_KEY",
         "default_model": "gpt-4o-mini",
     },
+    # Cursor ships no public OpenAI-compatible chat endpoint: a `crsr_` API
+    # key exposes the Cloud Agents API, and api2.cursor.sh is the IDE's
+    # internal (gRPC) backend — direct calls here can never work. The preset
+    # therefore targets a LOCAL OpenAI-compatible proxy over the Cursor login
+    # (e.g. `npx cursor-openai-api serve` on :3000) — see
+    # docs/integrations.md -> Cursor.
     "cursor": {
-        "base_url": "https://api2.cursor.sh",
+        "base_url": "http://127.0.0.1:3000/v1",
         "api_key_env": "CURSOR_API_KEY",
-        "default_model": "cursor-grok-4.5-high",
+        "default_model": "cursor-model",
     },
     "local": {
         "base_url": "http://127.0.0.1:8000/v1",
@@ -145,8 +152,8 @@ class LLMConfig:
         )
         if cfg.api_key is None and api_key_env:
             cfg.api_key = os.environ.get(api_key_env)
-        if cfg.api_key is None and preset == "local":
-            cfg.api_key = "local"  # vLLM/Ollama accept any bearer token
+        if cfg.api_key is None and preset in ("local", "cursor"):
+            cfg.api_key = "local"  # local servers and the Cursor login proxy accept any bearer token
         return cfg
 
     @classmethod

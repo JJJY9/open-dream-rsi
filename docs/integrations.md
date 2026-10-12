@@ -380,6 +380,69 @@ claude mcp add open-dream-rsi -- python3 -m open_dream_rsi mcp \
 
 Check with `/mcp` inside a session.
 
+### Cursor
+
+Cursor has **no public OpenAI-compatible chat endpoint**: a `crsr_…` API key
+exposes the Cloud Agents API (`POST /v1/agents`, agent runs — not
+chat-completions), and `api2.cursor.sh` — the host the IDE itself talks to —
+is an internal gRPC backend. Pointing the dreamer straight at either fails.
+The supported route is a **local OpenAI-compatible proxy over the Cursor
+login**, e.g. [cursor-openai-api](https://github.com/egoist/cursor-openai-api):
+
+```bash
+npm i -g cursor-openai-api
+cursor-openai-api login          # OAuth browser flow, stores the Cursor session
+cursor-openai-api serve          # OpenAI-compatible /v1 on :3000
+```
+
+Then point ODR at it. The `cursor` preset already defaults to
+`http://127.0.0.1:3000/v1` (model auto-discovered from `GET /v1/models`, any
+bearer accepted):
+
+```bash
+export ODR_LLM_PRESET=cursor
+# or explicitly:
+export OPENAI_BASE_URL=http://127.0.0.1:3000/v1
+```
+
+MCP registration (`.cursor/mcp.json`) — **absolute paths everywhere** (Cursor
+spawns the server without your shell environment, and relative
+`--memory`/`--tasks` resolve against the session cwd, not the repo; the same
+applies to the interpreter):
+
+```json
+{
+  "mcpServers": {
+    "open-dream-rsi": {
+      "command": "/abs/path/.venv/bin/python",
+      "args": ["-m", "open_dream_rsi", "mcp",
+               "--memory", "/abs/path/.dream_rsi",
+               "--tasks", "/abs/path/tasks.json"],
+      "env": {
+        "PYTHONPATH": "/abs/path/open-dream-rsi",
+        "ODR_LLM_PRESET": "cursor"
+      }
+    }
+  }
+}
+```
+
+(Long Windows paths: `C:\Users\you\…` work the same — keep them absolute.)
+
+Host-side MCP tool timeouts are often 1–2 minutes and can cut a full
+`odr_run_once` cycle short. Treat `odr_status` / `odr_add_task` /
+`odr_recipes` as the in-chat surface and run full cycles out-of-band against
+the same `--memory` dir:
+
+```bash
+python -m open_dream_rsi loop --once --memory /abs/path/.dream_rsi
+```
+
+Feeding Cursor chats into the KB: `sessions export --source cursor` (see the
+README's "Sessions as lesson source" section). The live database is
+write-ahead-logged — quit Cursor or copy `state.vscdb`+`-wal`+`-shm`
+together and pass the copy via `--db` for a complete snapshot.
+
 ### Claude Cowork / claude.ai connectors (remote only)
 
 Cowork connects to **remote** MCP URLs (the connection is brokered from

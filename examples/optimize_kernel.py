@@ -10,7 +10,7 @@ Loop:
 
 API keys are read ONLY from environment variables:
     export OPENAI_API_KEY=...            # OpenAI / vLLM / Ollama
-    export CURSOR_API_KEY=...            # Cursor Models API
+    export CURSOR_API_KEY=...            # Cursor via local proxy (docs/integrations.md)
     export ODR_LLM_PRESET=cursor         # switches the endpoint profile
 """
 

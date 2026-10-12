@@ -2,7 +2,7 @@
 
     python -m open_dream_rsi dashboard                  # mock LLM, zero setup
     python -m open_dream_rsi dashboard --provider openai --tasks tasks.json
-    python -m open_dream_rsi dashboard --provider cursor --model cursor-grok-4.5-high
+    python -m open_dream_rsi dashboard --provider cursor --model grok-4.7
 
 Opens a dark, dependency-free dashboard (stdlib http.server only) showing:
 KPIs (cycles / API calls / solved / dream iterations), a live event feed,

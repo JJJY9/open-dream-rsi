@@ -148,6 +148,55 @@ class ModelDiscoveryTests(unittest.TestCase):
         self.assertEqual(LLMConfig.from_env().model, "gpt-4o-mini")
 
 
+class CursorPresetTests(unittest.TestCase):
+    """Preset 'cursor' targets a LOCAL OpenAI-compatible proxy over the
+    Cursor login (Cursor has no public chat-completions endpoint)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = HTTPServer(("127.0.0.1", 0), DiscoveryEndpoint)
+        cls.port = cls.srv.server_address[1]
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.shutdown()
+
+    def setUp(self):
+        self._saved = {k: os.environ.get(k) for k in
+                       ("OPENAI_BASE_URL", "OPENAI_API_KEY", "ODR_LLM_MODEL",
+                        "CURSOR_API_KEY")}
+        for k in ("OPENAI_BASE_URL", "OPENAI_API_KEY", "ODR_LLM_MODEL",
+                  "CURSOR_API_KEY"):
+            os.environ.pop(k, None)
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def test_cursor_preset_defaults_to_local_proxy(self):
+        cfg = LLMConfig.from_preset("cursor")
+        self.assertEqual(cfg.base_url, "http://127.0.0.1:3000/v1")
+        self.assertEqual(cfg.api_key_env, "CURSOR_API_KEY")
+        # nothing on :3000 in the test env -> discovery fails -> preset model
+        self.assertEqual(cfg.model, "cursor-model")
+        # the Cursor login proxy accepts any bearer: zero-config works
+        self.assertEqual(cfg.api_key, "local")
+
+    def test_cursor_preset_discovers_served_model(self):
+        os.environ["OPENAI_BASE_URL"] = f"http://127.0.0.1:{self.port}/v1"
+        cfg = LLMConfig.from_preset("cursor")
+        self.assertEqual(cfg.model, "served-model-A")
+
+    def test_cursor_preset_prefers_explicit_key(self):
+        os.environ["CURSOR_API_KEY"] = "crsr_test"
+        cfg = LLMConfig.from_preset("cursor")
+        self.assertEqual(cfg.api_key, "crsr_test")
+
+
 class StaleModelEndpoint(BaseHTTPRequestHandler):
     """POST 404s the pinned 'stale' model; GET /models lists the real one."""
 

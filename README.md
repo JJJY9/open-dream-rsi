@@ -402,9 +402,14 @@ server. API keys are read **only** from environment variables.
 | Provider | Preset | Base URL | Key env var |
 |---|---|---|---|
 | OpenAI | `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
-| Cursor Models API | `cursor` | `https://api2.cursor.sh` | `CURSOR_API_KEY` |
+| Cursor (via local proxy) | `cursor` | `http://127.0.0.1:3000/v1` | `CURSOR_API_KEY` (optional) |
 | Local (vLLM / Ollama / LM Studio) | `local` | `http://127.0.0.1:8000/v1` | `OPENAI_API_KEY` |
 | Borrowed from goose config | `goose` | resolved from `~/.config/goose` | — |
+
+Cursor has **no public OpenAI-compatible chat endpoint** (a `crsr_…` key is
+for the Cloud Agents API; `api2.cursor.sh` is the IDE's internal gRPC
+backend), so the `cursor` preset targets a local OpenAI-compatible proxy over
+the Cursor login — see **[docs/integrations.md → Cursor](docs/integrations.md)**.
 
 Precedence is always: explicit overrides → environment → **endpoint model
 discovery** (first id from `GET /v1/models`) → preset defaults. A redeployed
