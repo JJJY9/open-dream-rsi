@@ -145,14 +145,19 @@ def _append_probe_tasks(memory_root: Path, probes: List[Dict[str, Any]]) -> int:
 
 
 def ingest_sessions(memory, sessions_db: "str | Path", *,
+                    source: str = "hermes",
                     limit: int = 25, client=None,
                     category: Optional[str] = None) -> Dict[str, Any]:
     """Distil NEW (unseen) host sessions into staging lessons AND queue
     their source tasks as replay probes (the gate's counterparties).
 
+    ``source="hermes"`` reads a Hermes ``state.db``; ``source="cursor"``
+    reads the Cursor ``User`` dir (``state.vscdb``) directly — no MCP
+    server involved, so this also works where MCP is blocked by policy.
+
     Returns {'new': n_sessions, 'added': n_lessons, 'probes': n_tasks}.
-    Sessions already processed are skipped — transcripts stay in state.db,
-    so skipping a cycle loses nothing.
+    Sessions already processed are skipped — transcripts stay in the
+    source store, so skipping a cycle loses nothing.
     """
     from open_dream_rsi.core.curator import (curate_lessons,
                                              evidence_snippets,
@@ -163,7 +168,15 @@ def ingest_sessions(memory, sessions_db: "str | Path", *,
     state = _load_state(root)
     seen = set(state.get("seen_sessions", []))
 
-    eps = read_hermes_sessions(sessions_db, limit=limit + len(seen))
+    if source not in ("hermes", "cursor"):
+        raise ValueError(f"unknown session source {source!r} "
+                         "(expected 'hermes' or 'cursor')")
+    if source == "cursor":
+        from open_dream_rsi.sessions import read_cursor_sessions
+        eps = read_cursor_sessions(user_dir=sessions_db,
+                                   limit=limit + len(seen))
+    else:
+        eps = read_hermes_sessions(sessions_db, limit=limit + len(seen))
     new = [e for e in eps if e.session_id not in seen][:limit]
     if not new:
         return {"new": 0, "added": 0}
@@ -211,6 +224,7 @@ def ingest_sessions(memory, sessions_db: "str | Path", *,
 
 def dream_once(memory_root: "str | Path", *,
                sessions_db: "str | Path | None" = None,
+               session_source: str = "hermes",
                skills_out: "str | Path | None" = None,
                client=None, tasks: Optional[List[Any]] = None,
                budget: int = 20, max_tokens: int = 4096,
@@ -231,7 +245,8 @@ def dream_once(memory_root: "str | Path", *,
         # 1. evidence (cheap unless new sessions carry failures)
         if sessions_db:
             report["ingest"] = ingest_sessions(
-                memory, sessions_db, client=client, category=category)
+                memory, sessions_db, source=session_source,
+                client=client, category=category)
 
         # 2. decide the tier
         state = _load_state(root)

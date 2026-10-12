@@ -380,68 +380,58 @@ claude mcp add open-dream-rsi -- python3 -m open_dream_rsi mcp \
 
 Check with `/mcp` inside a session.
 
-### Cursor
+### Cursor (without MCP — hooks and files)
 
-Cursor has **no public OpenAI-compatible chat endpoint**: a `crsr_…` API key
-exposes the Cloud Agents API (`POST /v1/agents`, agent runs — not
-chat-completions), and `api2.cursor.sh` — the host the IDE itself talks to —
-is an internal gRPC backend. Pointing the dreamer straight at either fails.
-The supported route is a **local OpenAI-compatible proxy over the Cursor
-login**, e.g. [cursor-openai-api](https://github.com/egoist/cursor-openai-api):
+Cursor installs where **MCP servers are blocked by policy** can still run
+the whole Dream-RSI loop: hooks and rules are a separate surface, and
+everything the loop needs travels through files (`tasks.json`, the memory
+dir), never through MCP.
+
+One command wires it (run inside the open-dream-rsi checkout):
+
+```bash
+python plugins/cursor/install.py
+# options: --memory D:/odr-mem  --provider local
+#          --env-file D:/odr/env.list   (OPENAI_BASE_URL / OPENAI_API_KEY ...)
+```
+
+The installer merges three entries into `~/.cursor/hooks.json` (existing
+entries preserved; it never touches `mcp.json`), writes an agent rule to
+`<repo>/.cursor/rules/odr-no-mcp.mdc`, and creates the memory dir with an
+empty `tasks.json`. Restart Cursor afterwards.
+
+What runs where:
+
+| Moment | What happens |
+|---|---|
+| A tool call fails the same way twice | `odr_sentinel_hook.py` (postToolUse / postToolUseFailure) injects a `[Sentinel]` recurrence note as additional context |
+| A session ends | `odr_dream_hook.py` detaches `python -m open_dream_rsi --memory <mem> dream --source cursor` |
+| You queue work | `python -m open_dream_rsi task add --id <id> --category <project> --prompt "<task>" --criteria "<done when...>"` (writes `<memory>/tasks.json`; `task list` shows the queue) |
+| The dream cycle runs | it imports Cursor chats as evidence (state.vscdb is read directly — no MCP), consumes the queue, runs the lesson gate, publishes earned knowledge; log: `<memory>/dream.log` |
+
+The dreamer's LLM is any OpenAI-compatible endpoint: pass
+`--provider/--model` (plus `--env-file` for `OPENAI_BASE_URL` /
+`OPENAI_API_KEY` / `ODR_LLM_MODEL` — keys stay out of the command line), or
+export the variables if Cursor sessions inherit your shell profile.
+Cadence and budget are decided inside the `dream` module, so firing on
+every session end is safe.
+
+When MCP **is** allowed and you want the dreamer on Cursor's own models:
+Cursor has no public OpenAI-compatible chat endpoint (a `crsr_...` key is
+the Cloud Agents API; `api2.cursor.sh` is the IDE's internal gRPC backend).
+The `cursor` preset targets a local proxy over the Cursor login:
 
 ```bash
 npm i -g cursor-openai-api
-cursor-openai-api login          # OAuth browser flow, stores the Cursor session
-cursor-openai-api serve          # OpenAI-compatible /v1 on :3000
+cursor-openai-api login && cursor-openai-api serve   # /v1 on :3000
+export ODR_LLM_PRESET=cursor                          # preset default: :3000
 ```
 
-Then point ODR at it. The `cursor` preset already defaults to
-`http://127.0.0.1:3000/v1` (model auto-discovered from `GET /v1/models`, any
-bearer accepted):
-
-```bash
-export ODR_LLM_PRESET=cursor
-# or explicitly:
-export OPENAI_BASE_URL=http://127.0.0.1:3000/v1
-```
-
-MCP registration (`.cursor/mcp.json`) — **absolute paths everywhere** (Cursor
-spawns the server without your shell environment, and relative
-`--memory`/`--tasks` resolve against the session cwd, not the repo; the same
-applies to the interpreter):
-
-```json
-{
-  "mcpServers": {
-    "open-dream-rsi": {
-      "command": "/abs/path/.venv/bin/python",
-      "args": ["-m", "open_dream_rsi", "mcp",
-               "--memory", "/abs/path/.dream_rsi",
-               "--tasks", "/abs/path/tasks.json"],
-      "env": {
-        "PYTHONPATH": "/abs/path/open-dream-rsi",
-        "ODR_LLM_PRESET": "cursor"
-      }
-    }
-  }
-}
-```
-
-(Long Windows paths: `C:\Users\you\…` work the same — keep them absolute.)
-
-Host-side MCP tool timeouts are often 1–2 minutes and can cut a full
-`odr_run_once` cycle short. Treat `odr_status` / `odr_add_task` /
-`odr_recipes` as the in-chat surface and run full cycles out-of-band against
-the same `--memory` dir:
-
-```bash
-python -m open_dream_rsi loop --once --memory /abs/path/.dream_rsi
-```
-
-Feeding Cursor chats into the KB: `sessions export --source cursor` (see the
-README's "Sessions as lesson source" section). The live database is
-write-ahead-logged — quit Cursor or copy `state.vscdb`+`-wal`+`-shm`
-together and pass the copy via `--db` for a complete snapshot.
+Feeding Cursor chats in by hand instead of the hook: `sessions export
+--source cursor` (see the README's "Importing real sessions" section).
+The live database is write-ahead-logged — quit Cursor or copy
+`state.vscdb`+`-wal`+`-shm` together and pass the copy via `--db` for a
+complete snapshot.
 
 ### Claude Cowork / claude.ai connectors (remote only)
 

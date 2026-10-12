@@ -25,6 +25,7 @@ import json
 import random
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from open_dream_rsi.core.agent import ChatClient
@@ -111,6 +112,45 @@ class Task:
     #: Optional success criterion for test-less tasks: consulted by the
     #: completion judge when tests are empty (tests always dominate).
     criteria: str = ""
+
+
+def append_task(tasks_file: "str | Path", task: Dict[str, Any]) -> Dict[str, Any]:
+    """Append one task dict to a tasks.json queue file (atomic, idempotent).
+
+    The single write path shared by the MCP tool, the CLI and any other
+    no-MCP queue feeder (hooks, scripts): validates the required fields,
+    normalises the test-less shape, refuses duplicate task_ids, and writes
+    through a temp file so a concurrent reader never sees a torn queue.
+    """
+    task = dict(task)
+    task.setdefault("max_attempts", 4)
+    if not task.get("tests"):
+        task["tests"] = []
+    for field_name in ("task_id", "category", "prompt"):
+        if not task.get(field_name):
+            raise ValueError(f"'{field_name}' is required")
+    if not task.get("tests") and not task.get("criteria"):
+        raise ValueError("either 'tests' (non-empty list of {call, expected}) "
+                         "or 'criteria' (success description for the "
+                         "completion judge) is required")
+    if task.get("tests") and (not isinstance(task["tests"], list)
+                              or not task["tests"]):
+        raise ValueError("'tests' must be a non-empty list of {call, expected}")
+    path = Path(tasks_file)
+    existing: List[Dict[str, Any]] = []
+    if path.exists():
+        existing = json.loads(path.read_text(encoding="utf-8"))
+    if any(t.get("task_id") == task["task_id"] for t in existing):
+        return {"added": False,
+                "reason": f"task_id '{task['task_id']}' already queued"}
+    existing.append(task)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(existing, indent=2, ensure_ascii=False),
+                   encoding="utf-8")
+    tmp.replace(path)
+    return {"added": True, "task_id": task["task_id"],
+            "tasks_total": len(existing), "tasks_file": str(path)}
 
 
 #: Minimum new replay steps required before re-asking the LLM for a policy

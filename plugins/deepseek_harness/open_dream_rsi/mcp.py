@@ -102,6 +102,8 @@ def tool_odr_lessons(args: Dict[str, Any]) -> Dict[str, Any]:
 
 def tool_odr_add_task(args: Dict[str, Any]) -> Dict[str, Any]:
     """Append a task to the task file so the next loop cycle picks it up."""
+    from open_dream_rsi.loop import append_task
+
     task = {
         "task_id": args.get("task_id"),
         "category": args.get("category"),
@@ -114,32 +116,7 @@ def tool_odr_add_task(args: Dict[str, Any]) -> Dict[str, Any]:
     for field_name in ("task_id", "category", "prompt"):
         if not task[field_name]:
             raise ValueError(f"'{field_name}' is required")
-    if not task.get("tests") and not task.get("criteria"):
-        raise ValueError("either 'tests' (non-empty list of {call, expected}) "
-                         "or 'criteria' (success description for the "
-                         "completion judge) is required")
-    if task.get("tests") and (not isinstance(task["tests"], list)
-                              or not task["tests"]):
-        raise ValueError("'tests' must be a non-empty list of {call, expected}")
-    # Normalise the test-less shape: the key exists with None whenever the
-    # caller passed no tests, so setdefault() would not fire and tasks.json
-    # would carry "tests": null.
-    if not task.get("tests"):
-        task["tests"] = []
-
-    path = _tasks_path(args)
-    existing: List[Dict[str, Any]] = []
-    if path.exists():
-        existing = json.loads(path.read_text(encoding="utf-8"))
-    if any(t.get("task_id") == task["task_id"] for t in existing):
-        return {"added": False, "reason": f"task_id '{task['task_id']}' already queued"}
-    existing.append(task)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(path)
-    return {"added": True, "task_id": task["task_id"], "tasks_total": len(existing),
-            "tasks_file": str(path)}
+    return append_task(_tasks_path(args), task)
 
 
 def _default_provider() -> str:

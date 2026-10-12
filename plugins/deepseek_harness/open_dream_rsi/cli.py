@@ -181,6 +181,38 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_task(args: argparse.Namespace) -> int:
+    """Queue tasks without MCP: append_task writes the same tasks.json the
+    loop/dream cycle consumes, so hooks or a terminal can feed the loop on
+    hosts where MCP servers are unavailable (e.g. blocked by policy)."""
+    from open_dream_rsi.loop import append_task
+
+    tasks_file = (Path(args.tasks) if args.tasks
+                  else Path(args.memory) / "tasks.json")
+    if args.task_cmd == "add":
+        task = {"task_id": args.id, "category": args.category,
+                "prompt": args.prompt, "tests": [],
+                "max_attempts": args.attempts}
+        if args.criteria:
+            task["criteria"] = args.criteria
+        try:
+            result = append_task(tasks_file, task)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+    tasks = (json.loads(tasks_file.read_text(encoding="utf-8"))
+             if tasks_file.exists() else [])
+    for t in tasks:
+        marker = ("criteria: " + t["criteria"][:60] if t.get("criteria")
+                  else f"{len(t.get('tests') or [])} test(s)")
+        print(f"{t.get('task_id')}: [{t.get('category')}] "
+              f"attempts={t.get('max_attempts', 4)} {marker}")
+    print(f"({len(tasks)} task(s) in {tasks_file})")
+    return 0
+
+
 def cmd_dream(args: argparse.Namespace) -> int:
     """Automated cycle: evidence -> candidates -> promotion gate -> skills.
 
@@ -189,12 +221,20 @@ def cmd_dream(args: argparse.Namespace) -> int:
     cost), so any trigger — a Hermes hook, the MCP tool, or this CLI —
     can fire as often as it likes without overrunning the budget."""
     from open_dream_rsi.dream import dream_once
+    from open_dream_rsi.sessions import default_cursor_user_dir
 
     client = None
     if not args.offline:
         client = _build_client(args.provider, args.model)
+    if args.source == "cursor":
+        # the Cursor store is a User DIR (state.vscdb inside), not a db file
+        sessions_db = args.sessions or args.cursor_user_dir \
+            or str(default_cursor_user_dir())
+    else:
+        sessions_db = args.sessions
     report = dream_once(
-        args.memory, sessions_db=args.sessions, skills_out=args.skills_out,
+        args.memory, sessions_db=sessions_db, session_source=args.source,
+        skills_out=args.skills_out,
         client=client, budget=args.budget, max_tokens=args.max_tokens,
         category=args.category)
     print(json.dumps(report, indent=2, ensure_ascii=False))
@@ -329,8 +369,14 @@ def main(argv: list[str] | None = None) -> int:
              "maintenance, skills publish; safe to fire from any trigger "
              "(cadence is decided internally, not by the caller)")
     dr.add_argument("--sessions", default=None,
-                    help="host state.db to import evidence from "
-                         "(e.g. ~/.hermes/state.db)")
+                    help="host session store to import evidence from "
+                         "(hermes: state.db path; cursor: the User dir)")
+    dr.add_argument("--source", default="hermes", choices=["hermes", "cursor"],
+                    help="kind of the --sessions store (default hermes; "
+                         "cursor reads state.vscdb directly, no MCP needed)")
+    dr.add_argument("--cursor-user-dir", default=None,
+                    help="Cursor User dir for --source cursor (default: the "
+                         "platform location, e.g. %%APPDATA%%\\Cursor\\User)")
     dr.add_argument("--skills-out", default=None,
                     help="render ACTIVE lessons here as SKILL.md files")
     dr.add_argument("--provider", default="openai",
@@ -344,6 +390,26 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("--offline", action="store_true",
                     help="no LLM: lifecycle maintenance only")
     dr.set_defaults(func=cmd_dream)
+
+    task = sub.add_parser(
+        "task", help="queue tasks without MCP (the file the loop consumes)")
+    task_sub = task.add_subparsers(dest="task_cmd", required=True)
+    ta = task_sub.add_parser("add", help="append one task to the queue file")
+    ta.add_argument("--id", required=True, help="unique task id")
+    ta.add_argument("--category", required=True,
+                    help="KB category (usually the project name)")
+    ta.add_argument("--prompt", required=True,
+                    help="the task prompt the agent will solve")
+    ta.add_argument("--criteria", default="",
+                    help="success criterion for test-less tasks")
+    ta.add_argument("--attempts", type=int, default=4)
+    ta.add_argument("--tasks", default=None,
+                    help="queue file (default: <memory>/tasks.json)")
+    tl = task_sub.add_parser("list", help="show queued tasks")
+    tl.add_argument("--tasks", default=None,
+                    help="queue file (default: <memory>/tasks.json)")
+    ta.set_defaults(func=cmd_task)
+    tl.set_defaults(func=cmd_task)
 
     status = sub.add_parser("status", help="show learned policies, recipes, recent events")
     status.set_defaults(func=cmd_status)

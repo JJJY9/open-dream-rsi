@@ -759,6 +759,7 @@ works identically (`--store ./store`) — git is just the transport.
 | `plugins/hermes_sentinel/` | Hermes → ODR engine | Sentinel observes tool results, annotates, gates |
 | `plugins/hermes_odr_trigger/` | Hermes → ODR engine | session-end hook spawns the detached `odr dream` cycle (no shell/cron) |
 | `plugins/deepseek_harness/` | DeepSeek Harness (`dsh`) → ODR | Cordis overlay: the ODR MCP server behind `@deepseek-ai/dsh-mcp-client` |
+| `plugins/cursor/` | Cursor → ODR (no MCP) | Hooks (sentinel notes, session-end dream) + `task add` queue — for Cursor installs where MCP servers are blocked |
 | `odr sessions export/distill` | Hermes → curator | session history becomes staging lessons |
 | `odr skills export` | curator → Hermes | active lessons become discovered SKILL.md files |
 | `odr dream` | any trigger | one automated cycle: evidence → gate → ALM → skills |
@@ -857,7 +858,7 @@ dreamed-policy gauges per category and the learned recipe library.
 | `gate_replay` | offline validation of the lesson promotion rule |
 | `sentinel` | host-agnostic error-class engine + `SentinelObservation` world contract |
 | `utils.goose` | goose config resolver (CLI + desktop dialects, keychain) |
-| `plugins/*` | Hermes / Claude Code / goose / DeepSeek Harness adapters |
+| `plugins/*` | Hermes / Claude Code / goose / DeepSeek Harness / Cursor adapters |
 | `benchmarks/travelplanner` | **the benchmark**: sandbox MCP server, episode runner, official-evaluator wrapper, split CSVs, raw published episode records |
 
 ## Tests

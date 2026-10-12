@@ -125,5 +125,101 @@ class TestDreamOnce(unittest.TestCase):
         self.assertEqual(report["tier"], "maintenance")
 
 
+class CursorIngestTests(unittest.TestCase):
+    """dream --source cursor: the Cursor store ingests like a Hermes one
+    (no MCP involved)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.mem = self.tmp / "mem"
+        self.mem.mkdir()
+
+    def _cursor_store(self, fail: bool = True) -> str:
+        user = self.tmp / "User"
+        (user / "globalStorage").mkdir(parents=True)
+        g = sqlite3.connect(user / "globalStorage" / "state.vscdb")
+        g.execute("create table cursorDiskKV (key TEXT UNIQUE, value BLOB)")
+        header = {"composerId": "c-1", "name": "scraper fix",
+                  "createdAt": 1737136403732,
+                  "fullConversationHeadersOnly": [{"bubbleId": "b1", "type": 1},
+                                                  {"bubbleId": "b2", "type": 2}]}
+        g.execute("insert into cursorDiskKV values ('composerData:c-1', ?)",
+                  (json.dumps(header),))
+        g.execute("insert into cursorDiskKV values ('bubbleId:c-1:b1', ?)",
+                  (json.dumps({"type": 1, "text": "the site blocks requests",
+                               "createdAt": 1737136404000}),))
+        g.execute("insert into cursorDiskKV values ('bubbleId:c-1:b2', ?)",
+                  (json.dumps({"type": 2, "text": "Error: 429 Too Many Requests",
+                               "createdAt": 1737136405000}),))
+        g.commit()
+        g.close()
+        return str(user)
+
+    def test_dream_once_ingests_cursor_store(self):
+        report = dream_once(self.mem, sessions_db=self._cursor_store(),
+                            session_source="cursor", client=_NoLLM())
+        self.assertFalse(report["skipped"])
+        self.assertEqual(report["ingest"]["new"], 1)
+        # probe task queued exactly like the hermes path does
+        tasks = json.loads((self.mem / "tasks.json").read_text())
+        self.assertEqual(len(tasks), 1)
+        self.assertTrue(str(tasks[0]["task_id"]).startswith("probe:"))
+
+    def test_cursor_ingest_is_idempotent(self):
+        from open_dream_rsi.memory import DreamMemory
+        store = self._cursor_store()
+        r1 = ingest_sessions(DreamMemory(self.mem), store, source="cursor",
+                             client=_NoLLM())
+        self.assertEqual(r1["new"], 1)
+        r2 = ingest_sessions(DreamMemory(self.mem), store, source="cursor",
+                             client=_NoLLM())
+        self.assertEqual(r2["new"], 0)
+
+    def test_unknown_source_raises(self):
+        from open_dream_rsi.memory import DreamMemory
+        with self.assertRaises(ValueError):
+            ingest_sessions(DreamMemory(self.mem), self.tmp / "whatever.db",
+                            source="mystery", client=_NoLLM())
+
+
+class QueueCliTests(unittest.TestCase):
+    """odr task add/list — the no-MCP queue seam (loop.append_task)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.queue = self.tmp / "tasks.json"
+
+    def _add(self, **kw):
+        from open_dream_rsi.loop import append_task
+        return append_task(self.queue, {"task_id": kw.get("id", "t1"),
+                                        "category": kw.get("cat", "demo"),
+                                        "prompt": kw.get("prompt", "do it"),
+                                        "criteria": kw.get("criteria", "done")})
+
+    def test_append_task_writes_and_normalises(self):
+        out = self._add()
+        self.assertTrue(out["added"])
+        task = json.loads(self.queue.read_text())[0]
+        self.assertEqual(task["tests"], [])
+        self.assertEqual(task["max_attempts"], 4)
+        self.assertEqual(task["criteria"], "done")
+
+    def test_append_task_refuses_duplicates(self):
+        self.assertTrue(self._add()["added"])
+        out = self._add()
+        self.assertFalse(out["added"])
+        self.assertIn("already queued", out["reason"])
+        self.assertEqual(len(json.loads(self.queue.read_text())), 1)
+
+    def test_append_task_validates_required_fields(self):
+        from open_dream_rsi.loop import append_task
+        with self.assertRaises(ValueError):
+            append_task(self.queue, {"task_id": "x", "category": "c"})
+        # neither tests nor criteria -> rejected
+        with self.assertRaises(ValueError):
+            append_task(self.queue, {"task_id": "x", "category": "c",
+                                     "prompt": "p"})
+
+
 if __name__ == "__main__":
     unittest.main()
