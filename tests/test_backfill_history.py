@@ -208,6 +208,33 @@ def test_save_state_backup_and_atomic(tmp_path):
 
 # -- drain command builder -----------------------------------------------------------
 
+def test_drain_reports_skip_and_stops(tmp_path, capsys, monkeypatch):
+    """The lock-holding case must print a clear skip line and stop, not
+    print None fields (regression: the first live drain run did)."""
+    class FakeProc:
+        returncode = 0
+        stdout = json.dumps({"skipped": True,
+                             "reason": "another dream is running"})
+        stderr = ""
+
+    calls = []
+
+    def fake_run(cmd, capture_output, text):
+        calls.append(cmd)
+        return FakeProc()
+
+    monkeypatch.setattr(bf.subprocess, "run", fake_run)
+    args = type("A", (), {"memory": tmp_path / "mem",
+                          "state_db": tmp_path / "db", "cycles": 3,
+                          "provider": "local", "budget": 1,
+                          "skills_out": None})()
+    assert bf.cmd_drain(args) == 0
+    out = capsys.readouterr().out
+    assert "skipped" in out and "another dream is running" in out
+    assert "None" not in out
+    assert len(calls) == 1  # break: no retry against a held lock
+
+
 def test_build_dream_cmd_defaults():
     cmd = bf.build_dream_cmd("py", "/mem", "/db", "local", 200)
     # --memory is a GLOBAL argparse flag: it must precede the subcommand

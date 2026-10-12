@@ -281,6 +281,11 @@ def cmd_drain(args) -> int:
         except ValueError:
             print(proc.stdout[-400:])
             continue
+        if report.get("skipped"):
+            print(f"cycle {i}: skipped ({report.get('reason', 'another '
+                  'dream is running')}) — the running cycle owns the memory "
+                  "dir; drain stops instead of fighting the lock")
+            break
         ing = report.get("ingest", {})
         cyc = report.get("cycle", {})
         print(f"cycle {i}: tier={report.get('tier')} "
