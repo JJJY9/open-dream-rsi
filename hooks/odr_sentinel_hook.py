@@ -30,13 +30,22 @@ def _repo_root_from_cwd() -> "str | None":
     return str(cwd) if (cwd / "open_dream_rsi" / "sentinel.py").exists() else None
 
 
+def _repo_root_from_home() -> "str | None":
+    """~/open-dream-rsi when it looks like a checkout — the plugin path:
+    Cursor loads the plugin from its own store, not from the repo, so the
+    fallback target is the user's clone (the documented default location)."""
+    home = Path.home() / "open-dream-rsi"
+    return str(home) if (home / "open_dream_rsi" / "sentinel.py").exists() else None
+
+
 def _resolve(argv: "list[str] | None") -> "tuple[str, str] | None":
     args = argv if argv is not None else sys.argv[1:]
     ns = argparse.ArgumentParser(add_help=False)
     ns.add_argument("--home", default=None)
     ns.add_argument("--memory", default=None)
     opts, _ = ns.parse_known_args(args)
-    home = opts.home or os.environ.get("ODR_HOME") or _repo_root_from_cwd()
+    home = (opts.home or os.environ.get("ODR_HOME") or _repo_root_from_cwd()
+            or _repo_root_from_home())
     if not home:
         return None
     memory = opts.memory or os.environ.get("ODR_MEMORY") \

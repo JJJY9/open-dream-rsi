@@ -18,6 +18,9 @@ from open_dream_rsi.memory import DreamMemory
 
 
 def _build_client(provider: str, model: str | None):
+    if provider == "cursor-agent":
+        from open_dream_rsi.cursor_agent import CursorAgentClient
+        return CursorAgentClient(model=model)
     from open_dream_rsi.llm import LLMConfig, OpenAICompatibleClient
 
     cfg = LLMConfig.from_preset(provider)  # honours OPENAI_BASE_URL / ODR_LLM_MODEL
@@ -338,7 +341,7 @@ def main(argv: list[str] | None = None) -> int:
     loop = sub.add_parser("loop", help="run the self-improvement cycle")
     loop.add_argument("--tasks", required=True, help="JSON file: list of Task dicts")
     loop.add_argument("--provider", default="openai",
-                      choices=["openai", "cursor", "local", "goose"],
+                      choices=["openai", "cursor-agent", "cursor", "local", "goose"],
                       help="LLM endpoint; 'goose' borrows goose's own "
                            "provider/model/key from ~/.config/goose")
     loop.add_argument("--model", default=None)
@@ -380,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("--skills-out", default=None,
                     help="render ACTIVE lessons here as SKILL.md files")
     dr.add_argument("--provider", default="openai",
-                    choices=["openai", "cursor", "local", "goose"])
+                    choices=["openai", "cursor-agent", "cursor", "local", "goose"])
     dr.add_argument("--model", default=None)
     dr.add_argument("--category", default=None,
                     help="force one KB category (default: per-episode cwd)")
@@ -456,7 +459,7 @@ def main(argv: list[str] | None = None) -> int:
     dis.add_argument("--category", default=None,
                      help="KB category (default: cwd name of each episode)")
     dis.add_argument("--provider", default="openai",
-                     choices=["openai", "cursor", "local", "goose"])
+                     choices=["openai", "cursor-agent", "cursor", "local", "goose"])
     dis.add_argument("--model", default=None)
     dis.add_argument("--limit", type=int, default=None)
     dis.add_argument("--dry-run", action="store_true",

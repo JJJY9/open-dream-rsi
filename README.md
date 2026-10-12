@@ -403,6 +403,7 @@ server. API keys are read **only** from environment variables.
 |---|---|---|---|
 | OpenAI | `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
 | Cursor (via local proxy) | `cursor` | `http://127.0.0.1:3000/v1` | `CURSOR_API_KEY` (optional) |
+| Cursor Agent CLI (headless, your login) | `cursor-agent` | — (no HTTP) | — |
 | Local (vLLM / Ollama / LM Studio) | `local` | `http://127.0.0.1:8000/v1` | `OPENAI_API_KEY` |
 | Borrowed from goose config | `goose` | resolved from `~/.config/goose` | — |
 
@@ -410,6 +411,10 @@ Cursor has **no public OpenAI-compatible chat endpoint** (a `crsr_…` key is
 for the Cloud Agents API; `api2.cursor.sh` is the IDE's internal gRPC
 backend), so the `cursor` preset targets a local OpenAI-compatible proxy over
 the Cursor login — see **[docs/integrations.md → Cursor](docs/integrations.md)**.
+Since 0.3.0 the default zero-proxy brain is the `cursor-agent` provider: the
+headless Cursor CLI authenticated by your Cursor login — no API key, no
+proxy (`dream --provider cursor-agent`). A machine without the CLI defers
+dream sessions instead of failing.
 
 Precedence is always: explicit overrides → environment → **endpoint model
 discovery** (first id from `GET /v1/models`) → preset defaults. A redeployed
@@ -759,7 +764,7 @@ works identically (`--store ./store`) — git is just the transport.
 | `plugins/hermes_sentinel/` | Hermes → ODR engine | Sentinel observes tool results, annotates, gates |
 | `plugins/hermes_odr_trigger/` | Hermes → ODR engine | session-end hook spawns the detached `odr dream` cycle (no shell/cron) |
 | `plugins/deepseek_harness/` | DeepSeek Harness (`dsh`) → ODR | Cordis overlay: the ODR MCP server behind `@deepseek-ai/dsh-mcp-client` |
-| `plugins/cursor/` | Cursor → ODR (no MCP) | Hooks (sentinel notes, session-end dream) + `task add` queue — for Cursor installs where MCP servers are blocked |
+| `hooks/` + `.cursor-plugin/` | Cursor → ODR (no MCP) | Plugin manifest (GitHub import) + hooks (sentinel notes, session-end dream; default brain: the cursor-agent CLI) + `task add` queue — for Cursor installs where MCP servers are blocked |
 | `odr sessions export/distill` | Hermes → curator | session history becomes staging lessons |
 | `odr skills export` | curator → Hermes | active lessons become discovered SKILL.md files |
 | `odr dream` | any trigger | one automated cycle: evidence → gate → ALM → skills |

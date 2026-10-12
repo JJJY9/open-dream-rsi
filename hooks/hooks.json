@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      { "command": "python hooks/odr_sentinel_hook.py || exit 0", "timeout": 30 }
+    ],
+    "postToolUseFailure": [
+      { "command": "python hooks/odr_sentinel_hook.py || exit 0", "timeout": 30 }
+    ],
+    "sessionEnd": [
+      { "command": "python hooks/odr_dream_hook.py --provider cursor-agent || exit 0", "timeout": 30 }
+    ]
+  }
+}
+

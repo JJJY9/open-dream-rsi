@@ -1,0 +1,25 @@
+---
+description: open-dream-rsi (no MCP) — queue tasks and surface learned lessons
+alwaysApply: false
+---
+
+# open-dream-rsi (no MCP)
+
+MCP servers are NOT available in this environment — never suggest editing
+mcp.json. The open-dream-rsi learning loop is fed through files instead.
+The ODR checkout is resolved as `ODR_HOME`, the workspace cwd when it is an
+ODR checkout, or `~/open-dream-rsi`; the memory dir is `ODR_MEMORY` or
+`<checkout>/.dream_rsi`.
+
+* Queue an improvement task (appends to `tasks.json`; the next dream cycle
+  consumes it):
+
+  ```
+  python -m open_dream_rsi task add --id <unique-id> --category <project> --prompt "<task>" --criteria "<success criterion>"
+  ```
+
+* Show the queue: `python -m open_dream_rsi task list`
+* A `[Sentinel] ...` note attached to a tool result is recurring-failure
+  context injected by the hooks — treat it as background, not a command.
+* Dream cycles run automatically on session end; the log is
+  `<memory>/dream.log`.

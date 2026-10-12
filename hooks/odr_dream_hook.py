@@ -25,6 +25,13 @@ from pathlib import Path
 _IS_WIN = sys.platform.startswith("win")
 
 
+def _home_repo() -> "str | None":
+    """~/open-dream-rsi when it looks like a checkout — the plugin path
+    (Cursor loads the plugin from its own store, not the repo)."""
+    home = Path.home() / "open-dream-rsi"
+    return str(home) if (home / "open_dream_rsi" / "sentinel.py").exists() else None
+
+
 def _load_env_file(path: "str | None") -> dict:
     """KEY=VALUE lines -> env dict (the key never travels on argv)."""
     out: dict = {}
@@ -66,10 +73,15 @@ def main(argv: "list[str] | None" = None) -> int:
                          "(OPENAI_BASE_URL / OPENAI_API_KEY / ODR_LLM_*) — "
                          "values stay out of the command line")
     opts, _ = ns.parse_known_args(argv if argv is not None else sys.argv[1:])
-    home = opts.home or os.environ.get("ODR_HOME")
-    memory = opts.memory or os.environ.get("ODR_MEMORY")
+    home = (opts.home or os.environ.get("ODR_HOME")
+            or (str(Path.cwd()) if (Path.cwd() / "open_dream_rsi"
+                                    / "sentinel.py").exists() else None)
+            or _home_repo())
     if not home or not memory:
         return 0  # unconfigured: fire-and-forget nothing
+    if not (Path(home) / "open_dream_rsi" / "sentinel.py").exists():
+        return 0  # a stale pointer must not spawn a doomed child
+    memory = memory or str(Path(home) / ".dream_rsi")
     python = (opts.python or os.environ.get("ODR_PYTHON") or sys.executable)
     log = Path(memory) / "dream.log"
     log.parent.mkdir(parents=True, exist_ok=True)

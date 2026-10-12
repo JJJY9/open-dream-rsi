@@ -122,16 +122,25 @@ def tool_odr_add_task(args: Dict[str, Any]) -> Dict[str, Any]:
 def _default_provider() -> str:
     """Zero-configuration provider chain for harness-spawned servers.
 
-    Precedence: ODR_LLM_PRESET > OPENAI_* env (proxy/direct) > goose's own
-    model (desktop/CLI config on this machine) > local vLLM/Ollama default.
-    A goose/Claude/Codex/Hermes-spawned MCP server often gets a scrubbed
-    environment — the goose resolver reads config files instead of env, so
-    the dreamer still borrows the host's brain without any setup.
+    Precedence: ODR_LLM_PRESET > OPENAI_* env (proxy/direct) > the Cursor
+    Agent CLI (headless brain over the user's Cursor login — no proxy, no
+    key) > goose's own model (desktop/CLI config on this machine) > local
+    vLLM/Ollama default.  A goose/Claude/Codex/Hermes-spawned MCP server
+    often gets a scrubbed environment — the goose resolver reads config
+    files instead of env, so the dreamer still borrows the host's brain
+    without any setup.
     """
     if os.environ.get("ODR_LLM_PRESET"):
         return os.environ["ODR_LLM_PRESET"]
     if os.environ.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_API_KEY"):
         return "openai"
+    try:
+        import shutil
+
+        if shutil.which("cursor-agent"):
+            return "cursor-agent"
+    except Exception:
+        pass
     try:
         from open_dream_rsi.utils.goose import goose_available
 

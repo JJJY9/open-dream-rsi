@@ -89,7 +89,7 @@ def _merge_hooks(hooks_path: Path, repo: Path, memory: str, python: str,
         return f"FAIL 'hooks' in {hooks_path} is not an object"
     changed = False
     for event, script in HOOKS:
-        ours = str(Path(repo) / "plugins" / "cursor" / "hooks" / script)
+        ours = str(Path(repo) / "hooks" / script)
         argv = [python, ours, "--home", str(repo), "--memory", memory]
         if event == "sessionEnd":
             argv += dream_extra
@@ -97,8 +97,17 @@ def _merge_hooks(hooks_path: Path, repo: Path, memory: str, python: str,
         entries = hooks.setdefault(event, [])
         if not isinstance(entries, list):
             return f"FAIL '{event}' in {hooks_path} is not a list"
-        if any(script in str(e.get("command", "")) for e in entries):
-            continue  # already installed — idempotent re-run
+        # Match by script name (the idempotency key), but RE-POINT when the
+        # stored command differs — e.g. a 0.2.x install referencing the
+        # pre-0.3.0 plugins/cursor/hooks/ location (files have moved).
+        idx = next((i for i, e in enumerate(entries)
+                    if isinstance(e, dict)
+                    and script in str(e.get("command", ""))), None)
+        if idx is not None:
+            if str(entries[idx].get("command")) != entry["command"]:
+                entries[idx]["command"] = entry["command"]
+                changed = True
+            continue  # already installed (now current) — idempotent re-run
         entries.append(entry)
         changed = True
     if not changed:
@@ -128,9 +137,11 @@ def main() -> int:
                     help="ODR memory dir (default: <repo>/.dream_rsi)")
     ap.add_argument("--python", default=sys.executable,
                     help="interpreter for the hooks (default: this one)")
-    ap.add_argument("--provider", default=None,
-                    help="dream LLM preset (openai/cursor/local/goose); "
-                         "passed to the sessionEnd dream hook")
+    ap.add_argument("--provider", default="cursor-agent",
+                    help="dream LLM preset (openai/cursor-agent/cursor/local/"
+                         "goose); passed to the sessionEnd dream hook. The "
+                         "default 'cursor-agent' runs the headless Cursor CLI "
+                         "on the user's own login — no proxy, no API key.")
     ap.add_argument("--model", default=None,
                     help="dream LLM model override")
     ap.add_argument("--env-file", default=None,
@@ -170,6 +181,11 @@ def main() -> int:
         cwd=str(repo), capture_output=True, timeout=60)
     print(("PASS" if probe.returncode == 0 else "FAIL") +
           f" `python -m open_dream_rsi` via {args.python} (rc={probe.returncode})")
+    import shutil
+    cli = shutil.which("cursor-agent")
+    print(("PASS" if cli else "WARN") + " cursor-agent CLI on PATH"
+          + ("" if cli else " (dreamer will defer sessions — install the "
+                            "Cursor CLI or pass --provider/--env-file)"))
 
     print(_merge_hooks(cursor_dir / "hooks.json", repo, memory, args.python,
                        dream_extra))

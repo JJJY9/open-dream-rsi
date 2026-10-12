@@ -419,7 +419,12 @@ every session end is safe.
 When MCP **is** allowed and you want the dreamer on Cursor's own models:
 Cursor has no public OpenAI-compatible chat endpoint (a `crsr_...` key is
 the Cloud Agents API; `api2.cursor.sh` is the IDE's internal gRPC backend).
-The `cursor` preset targets a local proxy over the Cursor login:
+Since 0.3.0 the zero-proxy route is the `cursor-agent` provider: the
+dreamer runs the headless Cursor CLI (`cursor-agent -p --force
+--output-format text`) on the user's own login — no API key, no proxy; the
+model is whatever the user's Cursor uses (`--model` / `ODR_LLM_MODEL` to
+pin). A machine without the CLI is safe: the dream defers those sessions
+(never burns evidence). The older local-proxy route remains:
 
 ```bash
 npm i -g cursor-openai-api
