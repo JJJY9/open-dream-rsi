@@ -397,11 +397,16 @@ class KnowledgeCurator:
         known = "\n".join(f"  - [{l.get('trigger', '')}] {l.get('text', '')}"
                           for l in existing[-MAX_LESSONS_PER_CATEGORY:]) or "(empty KB)"
         feedback = ""
+        has_corr = any("user said:" in e for e in evidence)
         for attempt in range(1 + self.max_repair):
             user = (f"Category [{category}]: {task_prompt}\n\n"
                     f"Lessons already in the knowledge base (do not restate):\n{known}\n\n"
-                    f"Failed attempts this cycle:\n" + "\n".join(evidence) + "\n\n"
-                    f"Previous rejection reason: {feedback or '(none)'}\n\n"
+                    f"Failed attempts this cycle:\n" + "\n".join(evidence) +
+                    ("\n\nNote: some records are user corrections (action starts with "
+                     "'user_correction'): the user's wording is evidence worth testing, "
+                     "not verified truth; distil only the reusable, scoped rule."
+                     if has_corr else "") +
+                    f"\n\nPrevious rejection reason: {feedback or '(none)'}\n\n"
                     f"Return the JSON array of at most {self.max_lessons} lessons.")
             kwargs: Dict[str, Any] = {"temperature": 0.5}  # distillation, not creativity
             kwargs["max_tokens"] = self.max_tokens

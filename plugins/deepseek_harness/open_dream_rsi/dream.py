@@ -164,6 +164,11 @@ def ingest_sessions(memory, sessions_db: "str | Path", *,
                                              evidence_snippets,
                                              KnowledgeCurator)
     from open_dream_rsi.sessions import episode_failures, read_hermes_sessions
+    from open_dream_rsi.corrections import (
+        dedupe_corrections,
+        distillable,
+        user_corrections,
+    )
 
     root = Path(memory.root)
     state = _load_state(root)
@@ -191,13 +196,28 @@ def ingest_sessions(memory, sessions_db: "str | Path", *,
     added_total = 0
     deferred = 0
     probes: List[Dict[str, Any]] = []
-    for ep in new:
+    # Issue #6: user corrections are a second evidence class. Collect per
+    # episode, dedupe deterministically ACROSS the batch before any paid
+    # curator call, then distil failures + surviving corrections together
+    # — one pipeline, one gate, no second learning path.
+    ep_evidence = [(ep, episode_failures(ep), user_corrections(ep))
+                   for ep in new]
+    all_corr = distillable(
+        dedupe_corrections([c for _, _, cs in ep_evidence for c in cs]))
+    kept = {(c.get("session_id"), c.get("msg_index")) for c in all_corr}
+    for ep, failures, corr_raw in ep_evidence:
         seen.add(ep.session_id)
-        failures = episode_failures(ep)
-        if not failures:
+        corrections = [c for c in corr_raw
+                       if (c.get("session_id"), c.get("msg_index")) in kept]
+        if corrections:
+            memory.log_event("user_correction_found", source=ep.source,
+                             session_id=ep.session_id, count=len(corrections),
+                             classes=[c.get("class", "") for c in corrections][:6])
+        evidence = failures + corrections
+        if not evidence:
             continue
         cat = category or (Path(ep.cwd).name if ep.cwd else ep.source)
-        distilled, err = curator.distill(cat, ep.title or cat, failures,
+        distilled, err = curator.distill(cat, ep.title or cat, evidence,
                                          memory.get_lessons(cat))
         if err and err.startswith("llm error"):
             # Transport failure (connect/HTTP/response shape): this session

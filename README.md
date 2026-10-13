@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-321%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-341%20passing-brightgreen)](tests/)
 
 ## What is this?
 
@@ -720,6 +720,33 @@ The next `odr loop` cycle gates the staging entries exactly like
 loop-collected ones; `odr artifacts --type lesson --history` shows the
 lifecycle events behind every activation.
 
+### User corrections (natural-language evidence, issue #6)
+
+Host sessions also carry corrections stated in prose — "nie tak, użyj
+istniejącego klienta", "don't create another HTTP client" — which error-marker
+scanning never sees. `corrections.py` extracts them deterministically (no
+extra LLM call per message), pairs each with the assistant turn it targets,
+and labels four classes: `correction`, `approach_redirect`, `preference`,
+`new_requirement`. Only the first three are distillation-ready; ordinary
+follow-ups, new requirements and ambiguous negatives stay unclassified.
+Provenance survives end to end: evidence actions read
+`user_correction:<host>:<session>#<msg_index>`, and each record keeps source
+host, session id, workspace and whether a later turn suggests the session
+recovered (`outcome: confirmed|unverified`). Message text arrives already
+secret-redacted from the readers; nothing is added back.
+
+The trust model is unchanged: **a user correction is evidence worth testing,
+not verified truth.** Candidates are deduplicated deterministically (Jaccard
+on content words) *before* any paid curator call — repeats within one episode
+do not strengthen evidence — then flow through the same curator prompt (with
+an explicit "user wording is evidence, not verified truth" note), enter
+`STAGING`, and face the same paired-replay gate. A correction-only session is
+no longer skipped: its probe task is the **pre-correction** user request, so
+the user's corrected answer never leaks into replay context. Every extraction
+is auditable via the `user_correction_found` event in `events.jsonl`; source
+model identity is provenance, never a trust score, and there is no
+cross-model evaluation matrix (one target: the configured runtime model).
+
 ### Backfill: re-distilling burned sessions
 
 A dream cycle consumes a host session the first time it distills it. While
@@ -923,10 +950,10 @@ dreamed-policy gauges per category and the learned recipe library.
 ## Tests
 
 ```bash
-python -m unittest discover -s tests          # or: pytest tests/ -q
+python -m unittest discover -s tests
 ```
 
-321 tests (+10 subtests), stdlib-only: benchmark behavioural contracts
+341 tests (+10 subtests), stdlib-only: benchmark behavioural contracts
 (greedy must solve nothing; the gated arm must dominate ε; the rollout must
 be prefix-only), sandbox escape regressions, gate semantics, MCP protocol,
 goose config dialects, sentinel channel semantics (nudge fires once per

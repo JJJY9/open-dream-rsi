@@ -147,31 +147,49 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     memory = DreamMemory(args.memory)
     provider = getattr(args, "provider", "openai")
     if args.dry_run:
+        from open_dream_rsi.corrections import user_corrections
         for ep in eps[: args.limit or len(eps)]:
             fails = episode_failures(ep)
+            corrs = user_corrections(ep)
             print(f"[{ep.source}:{ep.session_id[:12]}] {ep.title[:60]} "
-                  f"— {len(fails)} failure-shaped record(s)")
-            for f in fails[:3]:
+                  f"— {len(fails)} failure-shaped, {len(corrs)} correction-shaped record(s)")
+            for f in (fails + corrs)[:3]:
                 print("   ", f["errors"][0][:100])
         return 0
     from open_dream_rsi.cli import _build_client
     client = _build_client(provider, args.model)
     curator = KnowledgeCurator(client)
+    from open_dream_rsi.corrections import (
+        dedupe_corrections,
+        distillable,
+        user_corrections,
+    )
     total_added = 0
-    for ep in eps:
-        failures = episode_failures(ep)
-        if not failures:
+    ep_evidence = [(ep, episode_failures(ep), user_corrections(ep))
+                   for ep in eps]
+    all_corr = distillable(
+        dedupe_corrections([c for _, _, cs in ep_evidence for c in cs]))
+    kept = {(c.get("session_id"), c.get("msg_index")) for c in all_corr}
+    for ep, failures, corr_raw in ep_evidence:
+        corrections = [c for c in corr_raw
+                       if (c.get("session_id"), c.get("msg_index")) in kept]
+        if corrections:
+            memory.log_event("user_correction_found", source=ep.source,
+                             session_id=ep.session_id, count=len(corrections),
+                             classes=[c.get("class", "") for c in corrections][:6])
+        evidence = failures + corrections
+        if not evidence:
             continue
         category = args.category or (
             Path(ep.cwd).name if ep.cwd else ep.source)
         distilled, err = curator.distill(category, ep.title or category,
-                                         failures, memory.get_lessons(category))
+                                         evidence, memory.get_lessons(category))
         if err or not distilled:
             memory.log_event("lesson_rejected", source=ep.source,
                              session_id=ep.session_id, reason=(err or "empty")[:300])
             continue
         result = curate_lessons(memory.get_lessons(category), distilled,
-                                evidence=evidence_snippets(failures))
+                                evidence=evidence_snippets(evidence))
         memory.replace_lessons(category, result.entries)
         memory.log_event("lessons_curated", source=ep.source,
                          session_id=ep.session_id, category=category,
