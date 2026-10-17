@@ -354,6 +354,8 @@ def cmd_artifacts(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="odr", description="Open Dream-RSI autonomous supervisor")
     parser.add_argument("--memory", default=".dream_rsi", help="memory directory (one per instance)")
+    from open_dream_rsi import __version__ as _v
+    parser.add_argument("--version", action="version", version=f"open-dream-rsi {_v}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     loop = sub.add_parser("loop", help="run the self-improvement cycle")

@@ -7,9 +7,15 @@ supervisor for 3 cycles with --cycles. No external network, no real key.
 
 import json
 import os
+import sys
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# Allow running directly from a fresh clone (`python examples/live_loop_demo.py`)
+# without `pip install -e .` first.
+if __package__ in (None, "") and "open_dream_rsi" not in sys.modules:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 STATE = {"attempts": {}}
 

@@ -7,6 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![CI](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-347%20passing-brightgreen)](tests/)
 
 ## What is this?
@@ -51,6 +52,29 @@ self-checks** — behavioural regression contracts for the machinery — and
 carry no model-quality claim.
 
 ---
+
+## Try it — no API key, no install
+
+From a fresh clone, two commands show the whole loop on your machine. The
+demo spins up a mock OpenAI server in-process, so nothing leaves your laptop:
+
+```bash
+git clone https://github.com/patrykorwat/open-dream-rsi.git
+cd open-dream-rsi
+python examples/live_loop_demo.py          # full dream cycle, ~10 s
+python -m open_dream_rsi bench --cycles 10 --markdown   # deterministic self-check
+```
+
+The demo solves one task against a mock model that *fails on purpose* the
+first time, records the failure into a Discovery Tree, "dreams" over the
+recorded history between cycles, and reuses the verified fix afterwards —
+watch the cycle lines: the first cycle pays the failure tax (6 API calls),
+every later cycle solves from memory in 3. The benchmark prints the
+cold-baseline comparison (54% fewer calls at equal solve quality, re-run on
+every commit in CI).
+
+**Then point it at a real model** — any OpenAI-compatible endpoint, keys from
+the environment only, model name auto-detected: see [Quick start](#quick-start).
 
 ## How it works
 
@@ -953,7 +977,7 @@ dreamed-policy gauges per category and the learned recipe library.
 python -m unittest discover -s tests
 ```
 
-341 tests (+10 subtests), stdlib-only: benchmark behavioural contracts
+347 tests, stdlib-only: benchmark behavioural contracts
 (greedy must solve nothing; the gated arm must dominate ε; the rollout must
 be prefix-only), sandbox escape regressions, gate semantics, MCP protocol,
 goose config dialects, sentinel channel semantics (nudge fires once per

@@ -247,8 +247,8 @@ def cmd_requeue(args) -> int:
     backup = save_state(Path(args.memory), state)
     print(f"PASS dream_state.json rewritten; backup: {backup}")
     print(f"next: run 'drain' or let session-end fires re-distill "
-          f"{removed} sessions ({(removed + INGEST_LIMIT_PER_CYCLE - 1)
-          // INGEST_LIMIT_PER_CYCLE} cycles at {INGEST_LIMIT_PER_CYCLE}/cycle)")
+          f"{removed} sessions ({(removed + INGEST_LIMIT_PER_CYCLE - 1) // INGEST_LIMIT_PER_CYCLE}"
+          f" cycles at {INGEST_LIMIT_PER_CYCLE}/cycle)")
     return 0
 
 
@@ -282,8 +282,8 @@ def cmd_drain(args) -> int:
             print(proc.stdout[-400:])
             continue
         if report.get("skipped"):
-            print(f"cycle {i}: skipped ({report.get('reason', 'another '
-                  'dream is running')}) — the running cycle owns the memory "
+            reason = report.get("reason", "another dream is running")
+            print(f"cycle {i}: skipped ({reason}) — the running cycle owns the memory "
                   "dir; drain stops instead of fighting the lock")
             break
         ing = report.get("ingest", {})
