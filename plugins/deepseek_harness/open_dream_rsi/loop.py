@@ -475,8 +475,12 @@ class AutoRSIRuntime:
                 continue
             verdict = headroom_verdict(self.memory.get_task_outcomes(cat))
             if not verdict["has_headroom"]:
+                # verdict carries its own ``reason``; fold it into a field
+                # that cannot collide with the log_event kwarg (TypeError).
+                v = dict(verdict)
+                v["headroom_reason"] = v.pop("reason", "")
                 self.memory.log_event("lesson_gate_skipped", category=cat,
-                                      reason="no_headroom", **verdict)
+                                      reason="no_headroom", **v)
                 continue
             self._gate_staging_lessons(task, staged, report)
 
@@ -977,8 +981,10 @@ class AutoRSIRuntime:
         if not verdict["has_headroom"]:
             # v3-v9 measured: no injection mechanism beats a cheap cold
             # baseline — do not spend a curator or gate call on this category.
+            v = dict(verdict)
+            v["headroom_reason"] = v.pop("reason", "")
             self.memory.log_event("lesson_gate_skipped", category=task.category,
-                                  reason="no_headroom", **verdict)
+                                  reason="no_headroom", **v)
             return
         existing = self.memory.get_lessons(task.category)
         seen_evidence = set(self.memory.get_digested(task.category))

@@ -2,6 +2,7 @@
 curator/gate calls (live-replay v3-v9: seven injection mechanisms, zero
 paired gains on a 19/20 @ 3.0 calls/solve cold baseline)."""
 
+import json
 import tempfile
 import unittest
 
@@ -114,6 +115,30 @@ class TestLoopHeadroom(unittest.TestCase):
         hist = mem.get_task_outcomes("c")
         self.assertEqual(len(hist), 2)
         self.assertTrue(all(o["solved"] is False for o in hist))
+
+    def test_drain_staging_no_headroom_logs_without_crashing(self):
+        # Regression: headroom_verdict() carries its own ``reason`` key, so
+        # log_event(reason=..., **verdict) raised TypeError inside
+        # _drain_staging and killed the whole cycle (deployed ATX host,
+        # 2026-10-15..17: zero completed cycles). Staging lesson + a cheap
+        # baseline must log lesson_gate_skipped and finish the cycle.
+        mem = DreamMemory(tempfile.mkdtemp())
+        for _ in range(10):
+            mem.record_task_outcome("c", solved=True, calls=1)
+        mem.replace_lessons("c", [{"key": "k1", "trigger": "median even",
+                                   "text": "sort first, then answer.",
+                                   "status": "staging"}])
+        client = RecordingClient()
+        rt = AutoRSIRuntime(client=client, memory=mem, tasks=self._tasks(1),
+                            api_call_budget=60, max_tokens=128,
+                            enable_policy_code=False, enable_thoughts=False)
+        report = rt.run_once()  # must not raise
+        self.assertNotEqual(report.stopped_reason, "error")
+        skipped = [json.loads(line) for line in
+                   (mem.root / "events.jsonl").read_text().splitlines()
+                   if '"lesson_gate_skipped"' in line]
+        self.assertTrue(skipped)
+        self.assertEqual(skipped[-1]["reason"], "no_headroom")
 
 
 if __name__ == "__main__":
