@@ -3,14 +3,14 @@
   "owner": { "name": "Patryk Orwat" },
   "metadata": {
     "description": "Dream-RSI learning loop for Cursor: sentinel error-recurrence notes and end-of-session dream cycles fed by Cursor chats. Brains default to the cursor-agent CLI (your Cursor login) — no MCP, no proxy, no API keys.",
-    "version": "0.3.1"
+    "version": "0.3.3"
   },
   "plugins": [
     {
       "name": "open-dream-rsi",
       "source": ".",
       "description": "Dream-RSI learning loop for Cursor: sentinel error-recurrence notes and end-of-session dream cycles fed by Cursor chats. Brains default to the cursor-agent CLI (your Cursor login) — no MCP, no proxy, no API keys.",
-      "version": "0.3.1",
+      "version": "0.3.3",
       "author": { "name": "Patryk Orwat" },
       "homepage": "https://github.com/patrykorwat/open-dream-rsi",
       "repository": "https://github.com/patrykorwat/open-dream-rsi",

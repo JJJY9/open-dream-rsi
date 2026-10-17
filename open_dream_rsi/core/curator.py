@@ -23,8 +23,10 @@ A distilled payload is a JSON array of at most ``max_lessons`` objects::
     {"trigger": str, "text": str}
 
 ``trigger``: 1-4 lowercase keywords tying the lesson to a task/failure
-family; ``text``: one actionable insight (<= 280 chars) grounded in the
-failure evidence shown to the curator. Generic advice is rejected.
+family; ``text``: one actionable insight (<= 1200 chars) grounded in the
+failure evidence shown to the curator — the observation, the mechanism
+that made it fail, and the bounded fix with its stop condition. Generic
+advice is rejected.
 """
 
 from __future__ import annotations
@@ -38,14 +40,16 @@ from typing import Any, Dict, List, Optional, Tuple
 #: Hard caps enforced by the structural gate — oversized or vague records
 #: never enter the knowledge base (cheap gate: lessons are retrieved text,
 #: so contamination is the failure mode to defend against).
-MAX_LESSON_CHARS = 280
+MAX_LESSON_CHARS = 1200
 MIN_TRIGGER_WORDS = 1
 MAX_TRIGGER_WORDS = 4
 MAX_LESSONS_PER_CATEGORY = 8
 #: Retrieval: how many lessons a single proposal prompt may carry and the
-#: total character budget for them (keeps the solver prompt honest).
+#: total character budget for them (keeps the solver prompt honest). The
+#: budget scales with the text cap so a detailed lesson is never silently
+#: dropped at retrieval time (select_lessons skips what does not fit).
 MAX_LESSONS_IN_PROMPT = 4
-MAX_PROMPT_LESSON_CHARS = 700
+MAX_PROMPT_LESSON_CHARS = 3000
 #: Pruning: a lesson used this many times with zero recorded solves is
 #: dead weight and gets retired to keep the KB from rotting. Retirement is
 #: a LIFECYCLE transition (STALE -> ARCHIVED via the Artifact Lifecycle
@@ -84,14 +88,20 @@ LESSON_CONTRACT = (
     "Reply with ONLY one fenced ```json``` block containing an array of "
     "objects, each exactly: {{\"trigger\": \"...\", \"text\": \"...\"}}. "
     "'trigger' is 1-4 lowercase keywords tying the lesson to this failure "
-    "family; 'text' is one actionable insight in at most 280 characters, "
-    "grounded ONLY in the evidence shown. Phrase the insight as a "
+    "family; 'text' is one actionable insight in at most 1200 characters, "
+    "grounded ONLY in the evidence shown. Be SPECIFIC, not terse: name the "
+    "observable signal (the exact error shape, tool, or state that "
+    "recurs), the mechanism that made the attempt fail, and the bounded "
+    "behavior that avoids it - a lesson a future reader could act on "
+    "without seeing this evidence is the goal. Prefer the longer end of "
+    "the range when the evidence supports it; do not compress a real "
+    "mechanism into a slogan. Phrase the insight as a "
     "DECLARATIVE fact about the task family, never as a command to the "
     "solver: measured on a greedy decoder, the imperative form of exact "
     "true facts lost 12 paired comparisons with 0 wins against their "
     "declarative form. EVERY lesson MUST end with an "
     "explicit stop condition (e.g. '...then answer immediately', '...at "
-    "most one extra lookup') — never instruct open-ended searching: models "
+    "most one extra lookup') - never instruct open-ended searching: models "
     "with deterministic decoding treat 'keep checking' as a command to "
     "never finish. No generic advice ('write better code'), no "
     "task-specific constants, no restate-the-error entries; if the evidence "
