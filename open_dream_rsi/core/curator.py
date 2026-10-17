@@ -23,7 +23,7 @@ A distilled payload is a JSON array of at most ``max_lessons`` objects::
     {"trigger": str, "text": str}
 
 ``trigger``: 1-4 lowercase keywords tying the lesson to a task/failure
-family; ``text``: one actionable insight (<= 1200 chars) grounded in the
+family; ``text``: one actionable insight (<= 80000 chars) grounded in the
 failure evidence shown to the curator — the observation, the mechanism
 that made it fail, and the bounded fix with its stop condition. Generic
 advice is rejected.
@@ -40,7 +40,7 @@ from typing import Any, Dict, List, Optional, Tuple
 #: Hard caps enforced by the structural gate — oversized or vague records
 #: never enter the knowledge base (cheap gate: lessons are retrieved text,
 #: so contamination is the failure mode to defend against).
-MAX_LESSON_CHARS = 1200
+MAX_LESSON_CHARS = 80_000
 MIN_TRIGGER_WORDS = 1
 MAX_TRIGGER_WORDS = 4
 MAX_LESSONS_PER_CATEGORY = 8
@@ -49,7 +49,7 @@ MAX_LESSONS_PER_CATEGORY = 8
 #: budget scales with the text cap so a detailed lesson is never silently
 #: dropped at retrieval time (select_lessons skips what does not fit).
 MAX_LESSONS_IN_PROMPT = 4
-MAX_PROMPT_LESSON_CHARS = 3000
+MAX_PROMPT_LESSON_CHARS = 80_000
 #: Pruning: a lesson used this many times with zero recorded solves is
 #: dead weight and gets retired to keep the KB from rotting. Retirement is
 #: a LIFECYCLE transition (STALE -> ARCHIVED via the Artifact Lifecycle
@@ -88,7 +88,7 @@ LESSON_CONTRACT = (
     "Reply with ONLY one fenced ```json``` block containing an array of "
     "objects, each exactly: {{\"trigger\": \"...\", \"text\": \"...\"}}. "
     "'trigger' is 1-4 lowercase keywords tying the lesson to this failure "
-    "family; 'text' is one actionable insight in at most 1200 characters, "
+    "family; 'text' is one actionable insight in at most 80000 characters, "
     "grounded ONLY in the evidence shown. Be SPECIFIC, not terse: name the "
     "observable signal (the exact error shape, tool, or state that "
     "recurs), the mechanism that made the attempt fail, and the bounded "
