@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-347%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-350%20passing-brightgreen)](tests/)
 
 ## What is this?
 
@@ -593,7 +593,7 @@ Solve-rate self-checks saturate on easy suites and cannot tell good
 exploration from luck, so `bench-policy` hides each fix behind a
 *low-scoring* branch (passes 1/3 tests) past a *plausible decoy* (passes 2/3
 forever). A score-greedy loop locks onto the decoy and starves; escaping
-requires structural exploration. Five arms, one scripted solver, one budget:
+requires structural exploration. Six arms, one scripted solver, one budget:
 
 ```bash
 python -m open_dream_rsi bench-policy --cycles 8 --format md
@@ -604,8 +604,9 @@ python -m open_dream_rsi bench-policy --cycles 8 --format md
 | greedy | 0/120 | 0% | 480 | ∞ | 0 | 0 |
 | epsilon_greedy | 29/120 | 24% | 405 | 13.97 | 0 | 0 |
 | **evolved_policy** | **92/120** | **77%** | **252** | **2.74** | 27 | 0 |
-| **knowledge_curator** | **88/120** | **73%** | 332 | 3.77 | 0 | 34 |
+| **knowledge_curator** | **87/120** | **72%** | 330 | 3.79 | 0 | 27 |
 | **thought_guided** | **120/120** | **100%** | **164** | **1.37** | 0 | 0 |
+| **sentinel_guided** | **102/120** | **85%** | 219 | 2.15 | 15 | 0 |
 
 - **evolved_policy** — the loop asks the LLM for a policy program per
   category, validates and replay-scores it, and promotes only on evidence.
@@ -620,8 +621,15 @@ python -m open_dream_rsi bench-policy --cycles 8 --format md
   **from cycle 1**; the ledger-only ablation (same text in prompts, pick
   disabled) collapses back to the baselines — the win is the expansion
   rule, not prompt length.
+- **sentinel_guided** — replay-gated policies on a tree that carries
+  structured Sentinel facts: nodes whose error class keeps repeating are
+  recorded **blocked** (choice removal, the TravelPlanner-measured
+  mechanism), and the promoted policy reads `sentinel_blocked` and skips
+  them. 85% at 2.15 calls/solve with ε = 0 and zero curator calls; the
+  engine-off ablation (same policy code, no facts) falls to 75/120 — the win
+  is the features, not the code.
 
-![Decoy-trap suite: per-cycle solve rate, five arms](docs/screenshots/odr_policy_bench.png)
+![Decoy-trap suite: per-cycle solve rate, six arms](docs/screenshots/odr_policy_bench.png)
 
 ### `gate-replay` — would a lesson set have been promoted?
 
@@ -977,7 +985,7 @@ dreamed-policy gauges per category and the learned recipe library.
 python -m unittest discover -s tests
 ```
 
-347 tests, stdlib-only: benchmark behavioural contracts
+350 tests, stdlib-only: benchmark behavioural contracts
 (greedy must solve nothing; the gated arm must dominate ε; the rollout must
 be prefix-only), sandbox escape regressions, gate semantics, MCP protocol,
 goose config dialects, sentinel channel semantics (nudge fires once per

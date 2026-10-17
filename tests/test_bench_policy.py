@@ -228,5 +228,105 @@ class ArmsTest(unittest.TestCase):
             self.assertIn(arm, light)
 
 
+class SentinelGuidedArmTest(unittest.TestCase):
+    """The sentinel_guided arm: replay-gated policy + structured failure facts.
+
+    Attribution contract (same shape as the thought arm's): the SAME policy
+    code with the engine ON dominates its engine-OFF ablation and the
+    epsilon baseline on both axes; the win must come from the sentinel
+    features (blocked facts pruning dead side-chains from the exploration
+    queue), never from solver-side shortcuts. Numbers pinned from the
+    measured run on this commit (deterministic solver + seeds).
+    """
+    CYCLES, BUDGET, SEEDS = 6, 24, (7, 11, 23)
+
+    def test_sentinel_arm_dominates_ablation_and_baselines(self):
+        on = run_policy_arm("sentinel_guided", ARMS["sentinel_guided"],
+                            self.CYCLES, self.BUDGET, seeds=self.SEEDS)
+        off_cfg = {k: v for k, v in ARMS["sentinel_guided"].items()
+                   if k != "sentinel_repeat_block"}
+        off = run_policy_arm("sentinel_ablation", off_cfg,
+                             self.CYCLES, self.BUDGET, seeds=self.SEEDS)
+        eps = run_policy_arm("epsilon_greedy", ARMS["epsilon_greedy"],
+                             self.CYCLES, self.BUDGET, seeds=self.SEEDS)
+        self.assertEqual(on.solves_total, 72)      # measured, pinned
+        self.assertEqual(on.api_calls_total, 189)
+        self.assertEqual(off.solves_total, 48)     # == plain explorer, no facts
+        self.assertEqual(off.api_calls_total, 276)
+        self.assertGreater(on.solves_total, off.solves_total)   # features, not code
+        self.assertLess(on.api_calls_total, off.api_calls_total)
+        self.assertLess(on.policy_calls, off.policy_calls)      # faster promotion
+        self.assertGreater(on.solves_total, eps.solves_total)
+        self.assertLess(on.api_calls_total, eps.api_calls_total)
+        self.assertEqual(on.curator_calls, 0)
+        # no luck was involved: epsilon is 0.0 and the arm still converges
+        self.assertEqual(on.mean_solve_rate_by_cycle[0], 0.0)   # no policy yet in cycle 1
+        self.assertEqual(on.mean_solve_rate_by_cycle[2], 100.0) # converged by cycle 3
+
+    def test_sentinel_arm_no_solver_shortcut(self):
+        # every fix grows from expanding the promising-code node; sentinel
+        # facts reached the archived tree AND the rollout world
+        import tempfile
+        from pathlib import Path as _Path
+        from open_dream_rsi.sentinel import SentinelEngine
+        from open_dream_rsi.bench_policy import _RepeatBlockSentinel
+        from open_dream_rsi.core.policygen import rollout_world_payload
+        from open_dream_rsi.loop import AutoRSIRuntime as _RT, Task as _Task
+
+        for suite in TRAP_SUITES:
+            with self.subTest(category=suite.category):
+                root = tempfile.mkdtemp()
+                engine = _RepeatBlockSentinel(
+                    SentinelEngine(state_path=_Path(root) / "sentinel_state.json"), 2)
+                from open_dream_rsi.memory import DreamMemory as _DM
+                mem = _DM(_Path(root) / "mem")
+                task = _Task(task_id=f"{suite.category}_t", category=suite.category,
+                             prompt=suite.prompt, tests=list(suite.tests), max_attempts=4)
+                for _ in range(2):  # cycle 1 promotes, cycle 2 solves (as in the arm)
+                    rt = _RT(client=TrapSolver(), memory=mem, tasks=[task],
+                        api_call_budget=12, dream_iterations=5, rng_seed=999,
+                        fair_queue=False, sentinel_engine=engine,
+                        enable_policy_code=True, enable_knowledge=False,
+                        explore_epsilon=0.0, enable_thoughts=False)
+                    rt.run_once()
+                tree = mem.load_tree(task.task_id)
+                self.assertIsNotNone(tree)
+                self.assertTrue(any((n.sentinel or {}).get("blocked")
+                                    for n in tree.nodes.values()),
+                                "no blocked fact reached the archived tree")
+                world = rollout_world_payload(tree)
+                self.assertTrue(any(n["sentinel_blocked"] for n in world["nodes"]))
+                fixes = [n for n in tree.nodes.values() if n.score == 1.0]
+                self.assertTrue(fixes)
+                for f in fixes:
+                    parent = tree.nodes.get(f.parent_id)
+                    self.assertIsNotNone(parent)
+                    code = (parent.result or {}).get("code", "")
+                    self.assertEqual(code.strip(), suite.promising.strip())
+
+    def test_repeat_block_wrapper_blocks_at_threshold(self):
+        import tempfile
+        from pathlib import Path as _Path
+        from open_dream_rsi.sentinel import SentinelEngine
+        from open_dream_rsi.bench_policy import _RepeatBlockSentinel
+
+        eng = SentinelEngine(state_path=_Path(tempfile.mkdtemp()) / "sentinel_state.json")
+        w = _RepeatBlockSentinel(eng, 2)
+        o1 = w.observe_structured(tool="verify", result=None, session_id="t",
+                                  status="error", error_message="ValueError: boom")
+        self.assertFalse(o1.blocked)
+        self.assertEqual(o1.in_session_count, 1)
+        o2 = w.observe_structured(tool="verify", result=None, session_id="t",
+                                  status="error", error_message="ValueError: boom")
+        self.assertTrue(o2.blocked)
+        d = o2.to_world_dict()
+        self.assertTrue(d["blocked"])
+        self.assertEqual(d["repeat_world"], 2)
+        clean = w.observe_structured(tool="verify", result=None,
+                                     session_id="t2", status="ok")
+        self.assertFalse(clean.blocked)
+
+
+
 if __name__ == "__main__":
     unittest.main()

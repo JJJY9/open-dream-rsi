@@ -20,6 +20,11 @@ expansion strategy differs):
 * ``evolved_policy``  — the loop asks the LLM for a policy program per
   category, gates it by counterfactual rollout, and (on evidence) steers
   online expansion with the promoted code.
+* ``sentinel_guided`` — same, but the recorded tree carries structured
+  Sentinel facts: nodes whose error class keeps repeating are recorded
+  BLOCKED (choice removal, the TravelPlanner-measured mechanism), and the
+  promoted policy reads ``sentinel_blocked`` to skip them — structure
+  over luck: no epsilon, no lessons, no thoughts.
 
 The scripted model plays two roles deterministically (like ``MockLLM`` in
 ``bench.py``): a task solver following the family ladder, and a policy
@@ -39,8 +44,11 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
+from pathlib import Path
+
 from open_dream_rsi.loop import AutoRSIRuntime, Task
 from open_dream_rsi.memory import DreamMemory
+from open_dream_rsi.sentinel import SentinelEngine, SentinelObservation
 
 # ---------------------------------------------------------------------------
 # The decoy-trap suite. Each category has exactly three code families whose
@@ -156,6 +164,63 @@ TRAP_LESSON_TEXT = (
 )
 
 
+#: The policy program the scripted policy-writer returns when the recorded
+#: tree carries Sentinel repeats (the generation prompt's tree summary shows
+#: ``same_error=`` lines): the structural explorer (oldest fresh node,
+#: periodic root re-entry) restricted to nodes whose error class has NOT
+#: kept repeating. The blocked facts prune the dead side-chains from the
+#: exploration queue, so the promising branch is reached with fewer live
+#: attempts; on a fact-free tree the same code reduces to the plain
+#: explorer (asserted in tests/test_bench_policy.py).
+SENTINEL_EXPLORER_POLICY = """
+def choose_action(frontier, step):
+    if not frontier:
+        return None
+    def born(n):
+        tail = n['node_id'].rsplit('/', 1)[-1]
+        digits = ''.join(ch for ch in tail if ch.isdigit())
+        return int(digits) if digits else -1
+    clean = [n for n in frontier if not n.get('sentinel_blocked')]
+    pool = clean or frontier
+    fresh = [n for n in pool if n['children'] == 0]
+    if fresh and step % 3 != 0:
+        return min(fresh, key=born)['node_id']
+    return min(pool, key=born)['node_id']
+"""
+
+
+class _RepeatBlockSentinel:
+    """Benchmark-side engine wrapper: repeats become BLOCKED (choice removal).
+
+    The runtime's ``observe_structured()`` path records replay-safe facts on
+    each node; this wrapper composes the TravelPlanner-measured mechanism —
+    once an error class has repeated >= threshold inside the episode, the
+    observation is marked blocked, so the frontier feature (and any policy
+    reading it) treats the branch as removed. Pure composition: the engine
+    itself never blocks (SentinelObservation is rebuilt, never mutated).
+    """
+
+    def __init__(self, engine: SentinelEngine, repeat_threshold: int) -> None:
+        self.engine = engine
+        self.repeat_threshold = int(repeat_threshold)
+
+    def observe_structured(self, tool, result, session_id, status=None,
+                           error_message=None, budget=None, blocked=False):
+        obs = self.engine.observe_structured(
+            tool, result, session_id, status=status,
+            error_message=error_message, budget=budget, blocked=blocked)
+        if (obs.error_class is not None
+                and obs.in_session_count >= self.repeat_threshold):
+            obs = SentinelObservation(
+                signature=obs.signature, error_class=obs.error_class,
+                in_session_count=obs.in_session_count,
+                cross_session_count=obs.cross_session_count,
+                recurring=obs.recurring, finalize_nudge=obs.finalize_nudge,
+                budget_used=obs.budget_used, budget_total=obs.budget_total,
+                blocked=True)
+        return obs
+
+
 #: One-line PLAN texts the scripted solver states per code family when
 #: thoughts are requested (system prompt mentions PLAN). Plain English — no
 #: family code appears here, so the ideas ledger can never leak code into
@@ -262,6 +327,10 @@ class TrapSolver:
         user = messages[-1]["content"]
         if "exploration policy" in system:
             self.policy_calls += 1
+            if "same_error=" in user:
+                # the tree summary shows Sentinel repeats: write the
+                # blocked-aware explorer instead of the plain round-robin
+                return f"```python\n{SENTINEL_EXPLORER_POLICY}\n```"
             return f"```python\n{EXPLORER_POLICY}\n```"
         if "knowledge curator" in system:
             self.curator_calls += 1
@@ -338,6 +407,15 @@ ARMS: Dict[str, Dict[str, Any]] = {
     # KB. Any improvement over epsilon_greedy is attributable to thoughts.
     "thought_guided":   dict(enable_policy_code=False, enable_knowledge=False,
                              explore_epsilon=0.3, enable_thoughts=True),
+    # Sentinel-guided arm: the runtime gets a repeat-block Sentinel engine
+    # (wired by run_policy_arm from the sentinel_repeat_block key, which
+    # must never reach AutoRSIRuntime itself); the LLM-written policy reads
+    # sentinel_blocked and stops re-picking nodes whose error class keeps
+    # repeating — the TravelPlanner choice-removal mechanism, ported to
+    # exploration structure. No epsilon, no lessons, no thoughts.
+    "sentinel_guided":  dict(enable_policy_code=True,  enable_knowledge=False,
+                             enable_thoughts=False, explore_epsilon=0.0,
+                             sentinel_repeat_block=2),
 }
 
 
@@ -376,17 +454,31 @@ def run_policy_arm(arm: str, cfg: Dict[str, Any], cycles: int, budget: int,
     t0 = time.time()
     total_solves = total_calls = total_policy = total_curator = 0
     rates: List[List[float]] = []
+    # The sentinel arm wires a repeat-block engine into the runtime: error
+    # classes repeating >= threshold inside the episode are recorded BLOCKED
+    # on the node, surfacing as the sentinel_blocked frontier feature the
+    # promoted policy reads. The raw SentinelEngine only observes; the
+    # repeat->blocked mapping is the benchmark composition of the
+    # TravelPlanner gate (choice removal recorded on the world).
+    block_cfg = int(cfg.get("sentinel_repeat_block") or 0)
+    arm_cfg = {k: v for k, v in cfg.items() if k != "sentinel_repeat_block"}
     for seed in seeds:
         tasks = _trap_tasks()
         solver = TrapSolver()
         root = tempfile.mkdtemp(prefix=f"odr-polbench-{arm}-")
+        engine = None
+        if block_cfg:
+            engine = _RepeatBlockSentinel(
+                SentinelEngine(state_path=Path(root) / "sentinel_state.json"),
+                block_cfg)
         rates.append([])
         for c in range(cycles):
             memory = DreamMemory(root)  # persistent across cycles within a run
             runtime = AutoRSIRuntime(
                 client=solver, memory=memory, tasks=tasks,
                 api_call_budget=budget, dream_iterations=dream_iterations,
-                rng_seed=seed * 100 + c, fair_queue=False, **cfg,
+                rng_seed=seed * 100 + c, fair_queue=False,
+                sentinel_engine=engine, **arm_cfg,
             )
             runtime.api_calls_used = 0
             report = runtime.run_once()
@@ -450,11 +542,14 @@ def to_markdown(summary: Dict[str, Any]) -> str:
               "trap tasks and then burns its whole budget re-polishing the decoy; "
               "replay-gated LLM-written policies reach the hidden fixes and reuse "
               "them as warm starts; the curated knowledge base lets epsilon alone "
-              "spend luck elsewhere because the trap itself is remembered.", ""]
+              "spend luck elsewhere because the trap itself is remembered; the "
+              "sentinel-guided arm re-derives the same escape from structured "
+              "failure facts — nodes whose error class keeps repeating are "
+              "skipped, no luck and no lesson text required.", ""]
     return "\n".join(lines)
 
 
-def to_svg(summary: Dict[str, Any], width: int = 860, height: int = 300,
+def to_svg(summary: Dict[str, Any], width: int = 960, height: int = 300,
            theme: str = "dark") -> str:
     """Grouped bar chart: solve rate (%) per cycle per arm. Pure SVG, no deps.
 
@@ -465,9 +560,11 @@ def to_svg(summary: Dict[str, Any], width: int = 860, height: int = 300,
     cycles = summary["cycles"]
     dark = theme == "dark"
     colors = ({"greedy": "#e5534b", "epsilon_greedy": "#d4a72c", "evolved_policy": "#3fb950",
-               "knowledge_curator": "#58a6ff", "thought_guided": "#bc8cff"} if dark else
+               "knowledge_curator": "#58a6ff", "thought_guided": "#bc8cff",
+               "sentinel_guided": "#f0883e"} if dark else
               {"greedy": "#c0392b", "epsilon_greedy": "#b8860b", "evolved_policy": "#1e7d3c",
-               "knowledge_curator": "#1f6fb2", "thought_guided": "#6f42c1"})
+               "knowledge_curator": "#1f6fb2", "thought_guided": "#6f42c1",
+               "sentinel_guided": "#d97706"})
     palette = dict(bg="#0d1117", grid="#21262d", axis="#8b949e", text="#c9d1d9") if dark \
         else dict(bg="#ffffff", grid="#d8dee4", axis="#57606a", text="#24292f")
     pad_l, pad_r, pad_t, pad_b = 48, 16, 30, 46
@@ -510,7 +607,7 @@ def to_svg(summary: Dict[str, Any], width: int = 860, height: int = 300,
         lx += 150
     parts.append(f'<text x="{pad_l}" y="18" fill="{palette["text"]}" font-size="13" '
                  f'font-weight="600">Decoy-trap suite — solve rate per cycle '
-                 f'(greedy vs ε-greedy vs replay-gated policies vs curated KB vs thoughts)</text>')
+                 f'({len(arms)} arms, mean over {summary.get("runs", 1)} seeds)</text>')
     parts.append("</svg>")
     return "\n".join(parts)
 
