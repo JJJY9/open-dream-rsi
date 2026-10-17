@@ -205,6 +205,46 @@ class CursorIngestTests(unittest.TestCase):
                             source="mystery", client=_NoLLM())
 
 
+class ProbeQueueCapTests(unittest.TestCase):
+    """The queue backstop (dream._cap_probe_queue): retires OLD, already-
+    attempted probes only — an unprocessed probe is never dropped."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.queue = self.tmp / "tasks.json"
+
+    def _write(self, ids):
+        self.queue.write_text(json.dumps(
+            [{"task_id": i, "category": "c", "prompt": "p", "criteria": "d"}
+             for i in ids]))
+
+    def test_never_drops_an_unattempted_probe(self):
+        from open_dream_rsi.dream import MAX_PROBE_TASKS, _cap_probe_queue
+        ids = [f"probe:2026{i:04d}" for i in range(MAX_PROBE_TASKS + 10)]
+        self._write(ids)
+        removed = _cap_probe_queue(self.tmp)   # no task_attempts.json at all
+        self.assertEqual(removed, 0)
+        self.assertEqual(len(json.loads(self.queue.read_text())), len(ids))
+
+    def test_retires_old_attempted_probes_over_the_cap(self):
+        from open_dream_rsi.dream import MAX_PROBE_TASKS, _cap_probe_queue
+        ids = [f"probe:2026{i:04d}" for i in range(MAX_PROBE_TASKS + 10)]
+        self._write(ids)
+        (self.tmp / "task_attempts.json").write_text(
+            json.dumps({i: 1 for i in ids}))
+        removed = _cap_probe_queue(self.tmp)
+        self.assertEqual(removed, 10)
+        left = json.loads(self.queue.read_text())
+        self.assertEqual(len(left), MAX_PROBE_TASKS)
+        # the NEWEST probes survive; the oldest attempted ones retire
+        self.assertNotIn("probe:20260000", [t["task_id"] for t in left])
+
+    def test_under_cap_is_a_noop(self):
+        from open_dream_rsi.dream import _cap_probe_queue
+        self._write(["probe:a", "manual-1"])
+        self.assertEqual(_cap_probe_queue(self.tmp), 0)
+
+
 class QueueCliTests(unittest.TestCase):
     """odr task add/list — the no-MCP queue seam (loop.append_task)."""
 

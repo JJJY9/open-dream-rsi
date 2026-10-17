@@ -380,7 +380,7 @@ class KnowledgeCurator:
     """
 
     def __init__(self, client: Any, max_lessons: int = 3,
-                 max_repair: int = 1, max_tokens: int = 4096):
+                 max_repair: int = 1, max_tokens: int = 100_000):
         self.client = client
         self.max_lessons = max_lessons
         self.max_repair = max_repair

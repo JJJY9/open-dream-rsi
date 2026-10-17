@@ -144,6 +144,46 @@ def _append_probe_tasks(memory_root: Path, probes: List[Dict[str, Any]]) -> int:
     return added
 
 
+#: Queue backstop: how many probe tasks may sit in tasks.json once they have
+#: been processed. The fair queue (AutoRSIRuntime.fair_queue) is the actual
+#: starvation fix — this cap only retires OLD, already-attempted probes.
+MAX_PROBE_TASKS = 60
+
+
+def _cap_probe_queue(memory_root: Path) -> int:
+    """Retire old probe tasks AFTER they were processed (backstop, not the
+    fix). A probe that never got an attempt is NEVER dropped — unprocessed
+    work always deserves its turn, and the fair queue guarantees it gets
+    one before the tail of the backlog. Returns the number removed.
+    """
+    tp = memory_root / "tasks.json"
+    try:
+        tasks = json.loads(tp.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    probes = [(i, t) for i, t in enumerate(tasks)
+              if str(t.get("task_id", "")).startswith("probe:")]
+    if len(probes) <= MAX_PROBE_TASKS:
+        return 0
+    try:
+        attempts = json.loads((memory_root / "task_attempts.json")
+                              .read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        attempts = {}
+    # probe ids embed a sortable timestamp: oldest first
+    probes.sort(key=lambda it: str(it[1].get("task_id", "")))
+    stale = probes[:-MAX_PROBE_TASKS]
+    drop = {i for i, t in stale
+            if int(attempts.get(str(t.get("task_id")), 0)) > 0}
+    if not drop:
+        return 0
+    out = [t for i, t in enumerate(tasks) if i not in drop]
+    tmp = tp.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(out, indent=1), encoding="utf-8")
+    tmp.replace(tp)
+    return len(drop)
+
+
 def ingest_sessions(memory, sessions_db: "str | Path", *,
                     source: str = "hermes",
                     limit: int = 25, client=None,
@@ -262,7 +302,7 @@ def dream_once(memory_root: "str | Path", *,
                session_source: str = "hermes",
                skills_out: "str | Path | None" = None,
                client=None, tasks: Optional[List[Any]] = None,
-               budget: int = 20, max_tokens: int = 4096,
+               budget: int = 20, max_tokens: int = 100_000,
                category: Optional[str] = None,
                min_new_evidence: int = DEFAULT_MIN_NEW_EVIDENCE,
                max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS) -> Dict[str, Any]:
@@ -310,6 +350,12 @@ def dream_once(memory_root: "str | Path", *,
         if full:
             state["last_full_dream"] = time.time()
             _save_state(root, state)
+
+        # 3b. queue backstop — AFTER processing, never before. Starvation is
+        # fixed by the loop's fair queue (least-processed task first); this
+        # cap only retires probes that already had their one attempt. A probe
+        # never attempted is NEVER dropped — it still deserves its turn.
+        report["queue_pruned"] = _cap_probe_queue(root)
 
         # 4. publish earned knowledge (cheap; surfaces new ACTIVE lessons)
         if skills_out:

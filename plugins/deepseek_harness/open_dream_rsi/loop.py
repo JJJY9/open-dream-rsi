@@ -206,6 +206,7 @@ class AutoRSIRuntime:
         explore_epsilon: float = 0.15,
         rng_seed: int = 0,
         enable_judge: bool = True,
+        fair_queue: bool = True,
         sentinel_engine: Any = None,
         alm: Optional["ArtifactLifecycleManager"] = None,
     ):
@@ -231,6 +232,12 @@ class AutoRSIRuntime:
         self.enable_judge = enable_judge
         self._judge = LLMJudge(client, max_tokens=256) if enable_judge else None
         self._rng = random.Random(rng_seed)
+        # Fair queue: order the task list by processed-attempt count (least
+        # processed first) so a budget-capped cycle can never starve the
+        # tail of the backlog — starvation is fixed by PROCESSING, and the
+        # prune in dream_once stays what it is: a backstop, not the fix.
+        # Benchmarks pin this OFF so published arm numbers stay byte-stable.
+        self.fair_queue = fair_queue
         # Section-3 "dreaming with code": the LLM rewrites the exploration
         # policy itself; promoted candidates steer tree expansion online.
         self.enable_policy_code = enable_policy_code
@@ -422,12 +429,20 @@ class AutoRSIRuntime:
         report = CycleReport()
         self._drain_staging(report)      # gate leftovers from previous cycles
         tasks = self._tasks() if callable(self._tasks) else list(self._tasks)
+        if self.fair_queue and len(tasks) > 1:
+            # Least-processed first (stable: ties keep queue order) so a
+            # budget-capped cycle rotates through the backlog instead of
+            # always dying at the same head — starvation is fixed by
+            # PROCESSING; the queue cap downstream is only a backstop.
+            attempts = self.memory.get_all_task_attempts()
+            tasks = sorted(tasks, key=lambda t: attempts.get(t.task_id, 0))
         self._emit("cycle_start", tasks=[t.task_id for t in tasks])
         for task in tasks:
             if self.api_calls_used >= self.api_call_budget:
                 report.stopped_reason = "api_budget_exhausted"
                 break
             solved, improved = self._work_on_task(task, report)
+            self.memory.record_task_attempt(task.task_id)
             report.tasks_attempted += 1
             if solved:
                 report.tasks_solved += 1

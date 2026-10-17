@@ -386,7 +386,7 @@ def run_policy_arm(arm: str, cfg: Dict[str, Any], cycles: int, budget: int,
             runtime = AutoRSIRuntime(
                 client=solver, memory=memory, tasks=tasks,
                 api_call_budget=budget, dream_iterations=dream_iterations,
-                rng_seed=seed * 100 + c, **cfg,
+                rng_seed=seed * 100 + c, fair_queue=False, **cfg,
             )
             runtime.api_calls_used = 0
             report = runtime.run_once()

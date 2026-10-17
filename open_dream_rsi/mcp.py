@@ -194,7 +194,7 @@ def tool_odr_run_once(args: Dict[str, Any]) -> Dict[str, Any]:
         memory=DreamMemory(_memory_root(args)),
         tasks=tasks,
         api_call_budget=int(args.get("budget", 10)),
-        max_tokens=int(args.get("max_tokens", 4096)),
+        max_tokens=int(args.get("max_tokens", 100_000)),
         # Thought-conditioned branching ships ON (library default): attempts
         # record their PLAN line, proposals see the tried-idea ledger, and
         # expansion leaves dead idea families. Harnesses can opt out.
@@ -236,7 +236,7 @@ def tool_odr_dream(args: Dict[str, Any]) -> Dict[str, Any]:
         skills_out=args.get("skills_out") or os.environ.get("ODR_SKILLS_OUT"),
         client=client,
         budget=int(args.get("budget", 20)),
-        max_tokens=int(args.get("max_tokens", 4096)),
+        max_tokens=int(args.get("max_tokens", 100_000)),
         category=args.get("category"),
         min_new_evidence=int(args.get("min_new_evidence", 3)),
         max_age_seconds=float(args.get("max_age_seconds", 6 * 3600)),
@@ -305,7 +305,7 @@ TOOLS: Dict[str, Dict[str, Any]] = {
             "thoughts": {"type": "boolean",
                          "description": "thought-conditioned branching (default true)"},
             "max_tokens": {"type": "integer",
-                           "description": "completion budget per LLM call (default 4096; "
+                           "description": "completion budget per LLM call (default 100000; "
                                           "raise for reasoning models)"},
             "timeout": {"type": "number",
                         "description": "seconds per LLM call (default 300; slow local "

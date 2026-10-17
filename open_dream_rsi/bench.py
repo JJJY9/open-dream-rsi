@@ -85,6 +85,9 @@ def run_arm(
             # benchmarks (bench-policy) — keep the machinery under test pure.
             enable_knowledge=False,
             enable_thoughts=False,
+            # Published arm numbers are byte-stable: the fair queue must not
+            # reorder these tasks (benchmarks size their budget per task set).
+            fair_queue=False,
         )
         runtime.api_calls_used = 0
         report = runtime.run_once()

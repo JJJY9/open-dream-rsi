@@ -407,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="force one KB category (default: per-episode cwd)")
     dr.add_argument("--budget", type=int, default=20,
                     help="max API calls for a FULL dream (default 20)")
-    dr.add_argument("--max-tokens", type=int, default=4096)
+    dr.add_argument("--max-tokens", type=int, default=100_000)
     dr.add_argument("--offline", action="store_true",
                     help="no LLM: lifecycle maintenance only")
     dr.set_defaults(func=cmd_dream)

@@ -76,6 +76,47 @@ class LoopTest(unittest.TestCase):
         self.assertEqual(r2.tasks_solved, 1)
         self.assertLessEqual(self.llm.calls - calls_before, 1)  # recipe reuse, no re-derivation
 
+    def test_fair_queue_rotates_the_backlog_when_budget_is_tight(self):
+        # Regression: with budget < len(tasks), every cycle used to spend it
+        # on the same queue HEAD and the tail was never processed (the ATX
+        # host: 911 queued probes, head churn forever). Least-processed-first
+        # ordering must rotate coverage instead.
+        import tempfile as _tf
+        from pathlib import Path as _P
+        mem = DreamMemory(_P(_tf.mkdtemp()))
+        tasks = [Task(task_id=f"t{i}", category="math",
+                      prompt="Implement add(a, b).",
+                      tests=[{"call": "add(2, 3)", "expected": 5}],
+                      max_attempts=1) for i in range(4)]
+        rt = AutoRSIRuntime(client=ScriptedLLM(), memory=mem, tasks=tasks,
+                            api_call_budget=1, dream_iterations=5)
+        seen_ids = set()
+        for _ in range(4):
+            rt.api_calls_used = 0
+            rt.run_once()
+            seen_ids.update(t.task_id for t in tasks
+                            if mem.get_task_attempts(t.task_id) > 0)
+        self.assertEqual(seen_ids, {"t0", "t1", "t2", "t3"})
+
+    def test_fair_queue_off_keeps_queue_order(self):
+        # Benchmarks pin fair_queue=False so published arm numbers stay
+        # byte-stable — the queue must behave exactly like before.
+        import tempfile as _tf
+        from pathlib import Path as _P
+        mem = DreamMemory(_P(_tf.mkdtemp()))
+        tasks = [Task(task_id=f"t{i}", category="math",
+                      prompt="Implement add(a, b).",
+                      tests=[{"call": "add(2, 3)", "expected": 5}],
+                      max_attempts=1) for i in range(3)]
+        rt = AutoRSIRuntime(client=ScriptedLLM(), memory=mem, tasks=tasks,
+                            api_call_budget=1, dream_iterations=5,
+                            fair_queue=False)
+        for _ in range(3):
+            rt.api_calls_used = 0
+            rt.run_once()
+        self.assertEqual(mem.get_task_attempts("t0"), 3)
+        self.assertEqual(mem.get_task_attempts("t1"), 0)
+
     def test_budget_guard_stops_next_task(self):
         self.runtime.api_call_budget = 1
         self.runtime._tasks = [make_task("t1"), make_task("t2")]

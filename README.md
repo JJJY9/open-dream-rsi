@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-341%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-347%20passing-brightgreen)](tests/)
 
 ## What is this?
 

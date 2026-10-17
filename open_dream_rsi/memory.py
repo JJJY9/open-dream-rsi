@@ -149,6 +149,25 @@ class DreamMemory:
         data = self._load(self.root / "task_outcomes.json", {})
         return list(data.get(category, []))
 
+    # -- per-task attempt counters (queue fairness) --------------------------------
+
+    def record_task_attempt(self, task_id: str) -> None:
+        """Count one processed cycle for a task. The fairness ordering in
+        ``run_once`` reads these so a task that never got its turn moves to
+        the FRONT of the next queue — backlog starvation is fixed by
+        processing, not by pruning."""
+        data = self._load(self.root / "task_attempts.json", {})
+        data[task_id] = int(data.get(task_id, 0)) + 1
+        self._save(self.root / "task_attempts.json", data)
+
+    def get_task_attempts(self, task_id: str) -> int:
+        data = self._load(self.root / "task_attempts.json", {})
+        return int(data.get(task_id, 0))
+
+    def get_all_task_attempts(self) -> Dict[str, int]:
+        """Whole attempt-count map (one file read for a whole cycle)."""
+        return dict(self._load(self.root / "task_attempts.json", {}))
+
     # -- digested failure evidence (survives lesson pruning) ----------------------
 
     def get_digested(self, category: str) -> List[str]:
