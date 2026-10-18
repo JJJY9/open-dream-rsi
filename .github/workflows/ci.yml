@@ -58,6 +58,15 @@ jobs:
         run: |
           set -o pipefail
           python scripts/check_versions.py
+      - name: Typecheck (mypy, clean gate)
+        run: |
+          set -o pipefail
+          python -m pip install mypy==2.4.0
+          mypy open_dream_rsi/ --ignore-missing-imports > /tmp/mypy.log 2>&1 || true
+          N=$(grep -c ': error:' /tmp/mypy.log || true)
+          echo "mypy errors: $N (py.typed promise — the tree must typecheck clean)"
+          [ "$N" -eq 0 ]
+          python tests/test_typecheck_pin.py
 
   smoke:
     name: Key-free smoke (fresh clone)
@@ -92,3 +101,18 @@ jobs:
           python -c "import open_dream_rsi; print('import OK, version', open_dream_rsi.__version__)"
           python -c "import pathlib, open_dream_rsi; p = pathlib.Path(open_dream_rsi.__file__).parent / 'py.typed'; assert p.exists(), f'{p} missing from the wheel'"
           python -m open_dream_rsi --version
+
+  docker:
+    name: Docker image build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image (pip install inside, non-root user)
+        run: |
+          set -o pipefail
+          docker build -t open-dream-rsi:ci .
+      - name: Docker smoke (version and status)
+        run: |
+          set -o pipefail
+          docker run --rm open-dream-rsi:ci --version
+          docker run --rm open-dream-rsi:ci status

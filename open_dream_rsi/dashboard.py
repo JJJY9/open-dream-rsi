@@ -51,7 +51,7 @@ SOLUTIONS = {
     ),
 }
 
-DEMOS = [
+DEMOS: List[Dict[str, Any]] = [
     dict(task_id="add1", category="add",
          prompt="Implement add(a, b) returning the sum of two numbers.",
          tests=[{"call": "add(2, 3)", "expected": 5}, {"call": "add(-1, 1)", "expected": 0}]),
@@ -224,7 +224,7 @@ def run_dashboard(host: str = "0.0.0.0", port: int = 8765, provider: str = "mock
         raw = json.loads(open(tasks_file, encoding="utf-8").read())
         demo_tasks = [Task(**t) for t in raw]
     else:
-        demo_tasks = [Task(max_attempts=3, **t) for t in DEMOS]
+        demo_tasks = [Task(**{**t, "max_attempts": 3}) for t in DEMOS]
 
     if provider == "mock":
         client: Any = MockLLM()

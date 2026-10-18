@@ -190,7 +190,7 @@ def _forward_anthropic(up: ResolvedUpstream, payload: Dict[str, Any],
         "choices": [{"index": 0,
                      "message": {"role": "assistant", "content": text},
                      "finish_reason": {"end_turn": "stop", "max_tokens": "length"}
-                     .get(data.get("stop_reason"), "stop")}],
+                     .get(data.get("stop_reason") or "", "stop")}],
         "usage": {k: v for k, v in (data.get("usage") or {}).items()
                   if k in ("input_tokens", "output_tokens")},
     }

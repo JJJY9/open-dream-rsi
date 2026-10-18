@@ -14,6 +14,11 @@ Thanks for your interest in Open Dream-RSI.
 - **Tests are stdlib `unittest`**, discovered by
   `python -m unittest discover -s tests`. A pytest-importing test file dies
   as a whole-module ImportError under discovery — write unittest.
+- **Type annotations are a promise.** The package ships `py.typed` (PEP 561);
+  CI runs a mypy count-pin — a change may remove type errors, never add
+  them. Broad `except Exception` in the runtime is deliberate fault isolation
+  (each site carries a comment); do not narrow one without reading why it
+  exists.
 
 ## Making a change
 
@@ -48,7 +53,8 @@ between *that* benchmark and the scripted self-checks intact.
 
 Look for the [`good first issue`](/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 label. Docs fixes, integration examples, and reproduction tests are always
-welcome.
+welcome. The label exists; when it has no open issues, docs fixes and
+reproduction tests under an existing issue are the best entry points.
 
 ## Releasing (maintainers)
 
@@ -59,7 +65,7 @@ welcome.
    files into `plugins/deepseek_harness/open_dream_rsi/`. `python
    scripts/check_versions.py` verifies the sync (CI enforces it too).
 2. Push `main`, wait for CI green.
-3. Push the version tag: `git tag v0.3.8 && git push origin v0.3.8`
+3. Push the version tag: `git tag v0.3.9 && git push origin v0.3.9`
    (tag must equal the pyproject version, `v` prefix).
 4. `.github/workflows/publish.yml` builds the sdist/wheel, runs
    `twine check`, and publishes to PyPI via **trusted publishing** —

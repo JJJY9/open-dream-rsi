@@ -57,7 +57,7 @@ def _make_client(provider: str, model: Optional[str]) -> Any:
 def _default_tasks() -> List[Task]:
     from open_dream_rsi.dashboard import DEMOS
 
-    return [Task(max_attempts=3, **t) for t in DEMOS]
+    return [Task(**{**t, "max_attempts": 3}) for t in DEMOS]
 
 
 def run_arm(

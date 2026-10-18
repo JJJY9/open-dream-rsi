@@ -181,7 +181,7 @@ def run_isolated(
     _warn_no_jail_once()
     argv = [*jail_prefix(), *argv]
     env = SANDBOX_ENV if env is None else env
-    kwargs = {}
+    kwargs: Dict[str, Any] = {}
     preexec = _make_preexec(timeout) if _IS_POSIX else None
     if _IS_POSIX:
         # own session -> own process group we can kill wholesale

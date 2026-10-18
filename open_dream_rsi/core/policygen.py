@@ -422,7 +422,7 @@ def frontier_entry(node: Any, outcomes: Dict[str, float]) -> Dict[str, Any]:
     ``outcome`` per step with the as-of-now value over revealed descendants
     only (prefix rule).
     """
-    errors = []
+    errors: List[Any] = []
     result = node.result
     if isinstance(result, dict):
         errors = result.get("errors") or []

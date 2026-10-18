@@ -1,0 +1,26 @@
+cff-version: 1.2.1
+message: >-
+  If you use this software, please cite it using the metadata below.
+title: >-
+  Open Dream-RSI: An Open-Source Library for Recursive Self-Improvement Around
+  a Frozen LLM, with Replay-Gated Learned Policies and a Curated Knowledge Base
+authors:
+  - family-names: Orwat
+    given-names: Patryk
+    alias: patrykorwat
+    email: patrykorwat@gmail.com
+    website: https://github.com/patrykorwat
+version: 0.3.9
+date-released: "2026-10-18"
+license: MIT
+repository-code: "https://github.com/patrykorwat/open-dream-rsi"
+abstract: >-
+  An open implementation of the Dream-RSI architecture: a frozen LLM agent
+  improves through an offline "dreaming" loop — counterfactual replay over
+  recorded Discovery Trees promotes exploration policies, verified recipes and
+  curated lessons only when they beat the incumbent. Zero runtime dependencies
+  (Python 3.10+ stdlib).
+keywords:
+  - llm agents
+  - self-improvement
+  - offline reinforcement learning

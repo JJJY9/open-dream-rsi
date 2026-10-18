@@ -274,7 +274,8 @@ def import_lessons(store: "str | Path", memory_or_root: Any, *,
                 f"checksum mismatch for {rel} — the store may be tampered; "
                 "import aborted")
         payload = _load_json(path, {})
-        items, evidence = [], []
+        items: List[Dict[str, str]] = []
+        evidence: List[str] = []
         for l in payload.get("lessons", []):
             if not isinstance(l, dict):
                 continue
@@ -445,7 +446,7 @@ def import_worlds(store: "str | Path", memory_or_root: Any, *,
     never wired into the runtime's ``load_tree`` path and never executed —
     they are historical evidence a replay harness can point at explicitly.
     """
-    from open_dream_rsi.core.tree import DiscoveryTree, TreeNode
+    from open_dream_rsi.core.tree import TreeNode
 
     root = _memory_root(memory_or_root)
     store_dir = resolve_store(store, cache_root=root)

@@ -2,9 +2,7 @@
 completed-runs-only caching, opt-in integration with CodeVerifier/PolicySandbox."""
 
 import subprocess
-import tempfile
 import unittest
-from pathlib import Path
 
 from open_dream_rsi.sandbox import (SandboxCache, cached_run_isolated,
                                     content_key)
@@ -59,7 +57,6 @@ class TestSandboxCache(unittest.TestCase):
         self.assertIsNotNone(cache.lookup("c"))
 
     def test_ttl_expiry(self):
-        import time as _time
         cache = SandboxCache(ttl_seconds=3600)
         cache.store("k", subprocess.CompletedProcess([], 0))
         # backdate the entry past the TTL

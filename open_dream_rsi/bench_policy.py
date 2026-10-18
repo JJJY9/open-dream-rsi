@@ -72,7 +72,6 @@ class TrapSuite:
     promising: str
     fix: str
     low: str
-    low: str
 
 
 TRAP_SUITES: List[TrapSuite] = [

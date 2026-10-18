@@ -118,3 +118,29 @@ jobs:
         if: env.NPM_ALREADY_PUBLISHED != 'true'
         run: npm publish
         working-directory: plugins/deepseek_harness
+
+  release:
+    name: Create the GitHub Release for the tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create release (skip when the tag already has one)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists — skipping"
+            exit 0
+          fi
+          NOTES=$(python3 - <<'PY'
+          import os, re, pathlib
+          tag = os.environ["GITHUB_REF_NAME"]
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          m = re.search(r"## \[" + re.escape(tag[1:]) + r"\][^\n]*\n([\s\S]*?)(?=\n## \[|\Z)", text)
+          print(m.group(1).strip() if m else "See CHANGELOG.md for the change list.")
+          PY
+          )
+          gh release create "$GITHUB_REF_NAME" --title "open-dream-rsi ${GITHUB_REF_NAME#v}" --notes "$NOTES"

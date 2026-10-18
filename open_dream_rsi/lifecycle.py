@@ -837,19 +837,19 @@ class ArtifactLifecycleManager:
                 self.archive(st.artifact_id, actor=actor,
                              reason="retention: superseded/stale past grace window")
                 report.archived.append(st.artifact_id)
-        for st in list(self._states.values()):
-            st = self._states.get(st.artifact_id)
-            if st is None or st.pinned:
+        for snapshot in list(self._states.values()):
+            current = self._states.get(snapshot.artifact_id)
+            if current is None or current.pinned:
                 continue
-            if st.lifecycle_state in (ARCHIVED, REJECTED) \
-                    and now - st.updated_at > self.retention_seconds:
-                self._commit(st.artifact_id, from_state=st.lifecycle_state,
+            if current.lifecycle_state in (ARCHIVED, REJECTED) \
+                    and now - current.updated_at > self.retention_seconds:
+                self._commit(current.artifact_id, from_state=current.lifecycle_state,
                              to_state=DELETED_SENTINEL, kind="artifact.deleted",
                              actor=actor,
                              reason="retention policy: physical deletion",
-                             metadata={"state_at_deletion": st.lifecycle_state},
+                             metadata={"state_at_deletion": current.lifecycle_state},
                              extra_apply=None, delete=True)
-                report.deleted.append(st.artifact_id)
+                report.deleted.append(current.artifact_id)
         return report
 
     # -- auditability ----------------------------------------------------------

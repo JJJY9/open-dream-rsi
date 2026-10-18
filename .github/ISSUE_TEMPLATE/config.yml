@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/patrykorwat/open-dream-rsi#readme
+    about: Quick start, per-agent MCP setup (docs/integrations.md), self-checks, security model.

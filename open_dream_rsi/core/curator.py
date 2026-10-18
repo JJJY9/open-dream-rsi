@@ -359,7 +359,9 @@ def lesson_gate_verdict(results: Dict[str, List[Tuple[bool, bool]]]) -> GateVerd
       unbounded exploration instruction must never activate on a greedy
       solver no matter what a small sample says.
     """
-    promoted, rejected, detail = [], [], {}
+    promoted: List[str] = []
+    rejected: List[str] = []
+    detail: Dict[str, Any] = {}
     for key, pairs in results.items():
         gains = sum(1 for w, wo in pairs if w and not wo)
         regs = sum(1 for w, wo in pairs if wo and not w)

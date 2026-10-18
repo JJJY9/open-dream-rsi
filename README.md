@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-390%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-392%20passing-brightgreen)](tests/)
 [![PyPI](https://img.shields.io/pypi/v/open-dream-rsi)](https://pypi.org/project/open-dream-rsi/)
 
 ## What is this?
@@ -52,6 +52,10 @@ The scripted suites (`bench`, `bench-policy`) are **deterministic
 self-checks** — behavioural regression contracts for the machinery — and
 carry no model-quality claim.
 
+**How it compares** — stored state, how entries earn trust, runtime cost,
+against Mem0, Letta, Reflexion-style reflection, DSPy optimizers and skill
+libraries: [docs/comparison.md](docs/comparison.md).
+
 ---
 
 ## Try it — no API key, no install
@@ -76,6 +80,24 @@ every commit in CI).
 
 **Then point it at a real model** — any OpenAI-compatible endpoint, keys from
 the environment only, model name auto-detected: see [Quick start](#quick-start).
+
+## Docker (isolated sandbox)
+
+The sandbox already runs generated code as a `python -I` subprocess with a
+scrubbed environment and resource limits. The image wraps the whole system in
+a non-root, version-pinned environment so reproducibility is free; for a
+stronger sandbox jail, install `bubblewrap` in a derived image and point
+`ODR_SANDBOX_CMD` at it (see the Security model section):
+
+```bash
+docker build -t open-dream-rsi .
+docker run --rm open-dream-rsi status
+# journal + artifacts persist in a mounted volume:
+docker run --rm --mount type=bind,src=$PWD/.dream_rsi,dst=/work/.dream_rsi \
+  open-dream-rsi loop --tasks tasks.json
+```
+
+CI builds this image on every push.
 
 ## How it works
 
@@ -125,7 +147,7 @@ falls back to the greedy baseline.
 ## Quick start
 
 ```bash
-pip install open-dream-rsi        # 0.3.8 on PyPI
+pip install open-dream-rsi        # 0.3.9 on PyPI
 ```
 
 or from a checkout:
@@ -816,7 +838,7 @@ python -m unittest discover -s tests      # full suite, ~2 min
 python scripts/fast_tests.py              # fast subset (slow bench/sandbox modules excluded), ~15 s
 ```
 
-390 tests at this commit, re-counted by CI on every push (the badge above
+392 tests at this commit, re-counted by CI on every push (the badge above
 shows the last green run, not a live count). Stdlib-only: benchmark
 behavioural contracts
 (greedy must solve nothing; the gated arm must dominate ε; the rollout must
