@@ -19,7 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 #: Hard ceiling for one headless agent turn. The curator's distill prompt is
 #: small; a hang here must not stall the dream cycle.

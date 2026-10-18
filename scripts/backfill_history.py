@@ -175,7 +175,6 @@ def prune_probes(tasks: list, keep: int) -> tuple[list, int]:
     if len(probes) <= keep:
         return list(tasks), 0
     probes.sort(key=lambda it: str(it[1].get("task_id", "")))
-    kept = {i for i, _ in probes[-keep:]}
     out = [t for i, t in sorted(manual + probes[-keep:],
                                 key=lambda it: it[0])]
     return out, len(probes) - keep

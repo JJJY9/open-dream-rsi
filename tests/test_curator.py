@@ -4,7 +4,6 @@ usage-pruning, loop wiring and the knowledge-arm benchmark contract.
 Run:  python -m unittest discover -s tests
 """
 
-import json
 import tempfile
 import unittest
 
@@ -21,7 +20,7 @@ from open_dream_rsi.core.curator import (
     select_lessons,
     validate_lesson_items,
 )
-from open_dream_rsi.loop import AutoRSIRuntime, Task
+from open_dream_rsi.loop import AutoRSIRuntime
 from open_dream_rsi.memory import DreamMemory
 
 GOOD_ITEM = {
@@ -224,7 +223,7 @@ class TrapLoop:
 
     @staticmethod
     def run(category="median", cycles=5, budget=24, seed=5):
-        from open_dream_rsi.bench_policy import TrapSolver, TRAP_LESSON_TEXT, _trap_tasks
+        from open_dream_rsi.bench_policy import TrapSolver, _trap_tasks
 
         solver = TrapSolver()
         memory = DreamMemory(tempfile.mkdtemp(prefix="odr-cur-") + "/mem")

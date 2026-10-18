@@ -18,8 +18,42 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Run stdlib-only test suite
-        run: python -m unittest discover -s tests -v 2>&1 | tail -20
+      # pipefail is set explicitly: without it the step's exit code is that
+      # of `tail`, and a failing suite would show a green check.
+      - name: Fast subset (sub-minute signal)
+        run: |
+          set -o pipefail
+          python scripts/fast_tests.py 2>&1 | tail -20
+      - name: Full stdlib-only test suite
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests 2>&1 | tail -20
+      - name: Test count matches the README badge
+        run: |
+          set -o pipefail
+          BADGE=$(grep -oP 'badge/tests-\K[0-9]+' README.md)
+          COUNT=$(python -c "import unittest; print(unittest.TestLoader().discover('tests').countTestCases())")
+          echo "badge=$BADGE discovered=$COUNT"
+          test "$BADGE" = "$COUNT" || {
+            echo "::error::README test badge ($BADGE) does not match the discovered test count ($COUNT) — bump the badge in the same commit."
+            exit 1
+          }
+
+  lint:
+    name: Lint + vendored-copy drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Ruff (correctness rules, pinned version)
+        run: |
+          set -o pipefail
+          python -m pip install ruff==0.17.1
+          ruff check --select E9,F63,F7,F82,F401,F841 open_dream_rsi plugins examples scripts tests
+      - name: Vendored npm bundle copy matches open_dream_rsi/
+        run: python tests/test_vendored_drift.py -v
 
   smoke:
     name: Key-free smoke (fresh clone)
@@ -33,3 +67,24 @@ jobs:
         run: python examples/live_loop_demo.py
       - name: Deterministic benchmark runs key-free
         run: python -m open_dream_rsi bench --cycles 3 --markdown
+
+  package:
+    name: Wheel build + clean install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build wheel and install it
+        run: |
+          set -o pipefail
+          python -m pip install build
+          python -m build --wheel
+          python -m pip install dist/*.whl
+      - name: Import and version probe from outside the checkout
+        run: |
+          cd /
+          python -c "import open_dream_rsi; print('import OK, version', open_dream_rsi.__version__)"
+          python -c "import pathlib, open_dream_rsi; p = pathlib.Path(open_dream_rsi.__file__).parent / 'py.typed'; assert p.exists(), f'{p} missing from the wheel'"
+          python -m open_dream_rsi --version

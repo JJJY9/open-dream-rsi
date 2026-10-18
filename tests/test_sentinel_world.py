@@ -20,7 +20,7 @@ import json
 import tempfile
 import unittest
 
-from open_dream_rsi.core.tree import DiscoveryTree, TerminationReason, TreeNode
+from open_dream_rsi.core.tree import DiscoveryTree, TerminationReason
 from open_dream_rsi.loop import AutoRSIRuntime, DreamMemory, Task
 from open_dream_rsi.sentinel import SentinelEngine, SentinelObservation
 

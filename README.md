@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-357%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-359%20passing-brightgreen)](tests/)
 
 ## What is this?
 
@@ -33,8 +33,8 @@ beats the incumbent. An open implementation of *Recursive Self-Improvement
 through Evolving Worlds* (Dream-RSI, Zheng et al.,
 [arXiv:2609.14858](https://arxiv.org/abs/2609.14858)).
 
-**Zero runtime dependencies** — Python 3.10+ stdlib only, ~10.2k lines of
-library code, ~5.1k lines of tests, no build step.
+**Zero runtime dependencies** — Python 3.10+ stdlib only, ~9.8k lines of
+library code, ~5.4k lines of tests, no build step.
 
 **Not another memory plugin.** Experience-memory systems record what the
 agent learned and reuse it as-is. ODR is an *evolving worlds* loop: every
@@ -129,6 +129,13 @@ cd open-dream-rsi
 pip install -e .
 ```
 
+Or without a clone: `pip install
+git+https://github.com/patrykorwat/open-dream-rsi`. There is **no PyPI
+release**: the name `dreamrsi` there belongs to an unrelated project (see
+[Positioning](#positioning)); this library is the open implementation of the
+Dream-RSI paper (official repo:
+[zhengkid/Dream-RSI](https://github.com/zhengkid/Dream-RSI)).
+
 **Point it at a model — or don't.** Any OpenAI-compatible endpoint works;
 keys are read only from the environment. The *model name is
 auto-detected* from the endpoint (`GET /v1/models`), so pointing at a local
@@ -176,7 +183,8 @@ existing coding agent** — that is the fastest way in:
 python3 -m open_dream_rsi mcp --tasks ./tasks.json --memory ./.dream_rsi
 ```
 
-…see the next section for the exact block for your agent.
+…the exact config block for your agent lives in
+[docs/integrations.md](docs/integrations.md).
 
 ---
 
@@ -200,228 +208,18 @@ endpoint itself which model to use.
 Tools are registered prefixed per client (e.g. Hermes
 `mcp_open_dream_rsi_odr_run_once`). **No model calls tools on its own
 initiative** — trigger them via a recipe's `instructions:`, a hook, or an
-explicit ask ("check odr_recipes before you try again"). A tip that makes
-the loop proactive: add to your project `AGENTS.md`:
-
-```markdown
-## Self-improvement loop (MCP: open-dream-rsi)
-- Before implementing a self-contained Python utility, call `odr_recipes`
-  and `odr_lessons` for its category; reuse a verified recipe verbatim.
-- When you finish a hard, testable function, queue it with `odr_add_task`
-  (task_id = function name, tests = your test cases) so the loop can
-  dream over it offline.
-```
-
-### OpenCode
-
-Create (or merge into) `opencode.json` **in the project root where you
-work**:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "open-dream-rsi": {
-      "type": "local",
-      "command": ["python3", "-m", "open_dream_rsi", "mcp",
-                  "--tasks", "./tasks.json", "--memory", "./.dream_rsi"],
-      "enabled": true
-    }
-  }
-}
-```
-
-Start OpenCode and type `/mcps` — you should see `open-dream-rsi: connected`.
-
-### Goose
-
-Recommended — the script wires everything (diagnoses the install, resolves
-your goose provider, optionally starts the model-borrowing proxy, and
-writes the extension block into `~/.config/goose/config.yaml` itself):
-
-```bash
-./scripts/odr_goose_setup.sh            # diagnose + configure goose + start proxy
-./scripts/odr_goose_setup.sh --check    # diagnose only, change nothing
-./scripts/odr_goose_setup.sh --no-proxy # skip the proxy (use provider='goose')
-```
-
-Or add the extension manually to `~/.config/goose/config.yaml`:
-
-```yaml
-extensions:
-  open-dream-rsi:
-    enabled: true
-    type: stdio
-    name: open-dream-rsi
-    description: "Dream-RSI self-improvement loop. Use odr_add_task to queue a
-      Python task with tests, odr_run_once to run an improvement cycle,
-      odr_recipes/odr_lessons to reuse verified solutions and failure lessons,
-      odr_status to inspect what the loop has learned."
-    cmd: python3
-    args: ["-m", "open_dream_rsi", "mcp",
-           "--tasks", "/ABSOLUTE/PATH/projects/myproject/tasks.json",
-           "--memory", "/ABSOLUTE/PATH/projects/myproject/.dream_rsi"]
-    timeout: 300
-```
-
-Goose spawns extensions **without a shell and with a scrubbed environment**:
-use absolute paths (no `~`, no relative `./`) and pass any env the server
-needs via `envs:` — it will not inherit your export'ed `OPENAI_*`. After
-any config edit: fully quit goose (the desktop app caches config at
-startup), relaunch, and activate `open-dream-rsi` in the session's
-extensions picker. One-shot alternative (no config edit):
-`goose session --with-extension "python3 -m open_dream_rsi mcp --tasks ./tasks.json --memory ./.dream_rsi"`.
-
-Two first-class ways to run the dreamer on **exactly the model goose uses**
-(no second API key): `provider: "goose"` reads `~/.config/goose/config.yaml`
-itself (CLI and desktop dialects, `custom_providers/*.json`, `secrets.yaml`,
-macOS keychain), and `python3 -m open_dream_rsi proxy --port 8799` exposes
-goose's brain as a plain OpenAI-compatible endpoint — details in
+explicit ask ("check odr_recipes before you try again"). The `AGENTS.md`
+prompting block that makes the loop proactive lives in
 [docs/integrations.md](docs/integrations.md).
 
-### Hermes Agent
-
-Add under `mcp_servers` in `~/.hermes/config.yaml` (or via the dashboard's
-MCP catalog):
-
-```yaml
-mcp_servers:
-  open-dream-rsi:
-    command: "python3"
-    args: ["-m", "open_dream_rsi", "mcp",
-           "--tasks", "/ABS/PATH/open-dream-rsi/tasks.json",
-           "--memory", "/ABS/PATH/open-dream-rsi/.dream_rsi"]
-    timeout: 300
-    env:
-      OPENAI_BASE_URL: "http://YOUR-VLLM-HOST:8000/v1"
-      OPENAI_API_KEY: "***"        # any token for local servers
-```
-
-Restart Hermes; tools appear as `mcp_open_dream_rsi_*` in every platform
-toolset. Hermes is also the one host with MCP **sampling** support, if you
-ever want the dreamer to borrow the host's model through the protocol
-(today ODR resolves the endpoint itself instead).
-
-**Hermes in Docker:** mount the repo read-only and export `PYTHONPATH`
-(no pip layer in the image), then add the server block with an explicit
-`env:` (the container has no goose config):
-
-```dockerfile
-ENV PYTHONPATH=/opt/open-dream-rsi
-```
-
-```yaml
-# compose.yaml -> services.hermes
-volumes:
-  - /home/USER/git/open-dream-rsi:/opt/open-dream-rsi:ro
-  - ./data:/opt/data
-```
-
-Point `--tasks`/`--memory` at paths under the mounted data volume (e.g.
-`/opt/data/dream-rsi/...`) so memory survives rebuilds. Updating = `git
-pull` on the host + restart the container — no image rebuild.
-
-### Codex CLI
-
-```bash
-codex mcp add open-dream-rsi -- python3 -m open_dream_rsi mcp \
-  --tasks /ABS/PATH/tasks.json --memory /ABS/PATH/.dream_rsi
-```
-
-Verify with `codex mcp list` (or `[mcp_servers.open-dream-rsi]` with
-`command`/`args` in `~/.codex/config.toml`).
-
-### Claude Code
-
-```bash
-claude mcp add open-dream-rsi -- python3 -m open_dream_rsi mcp \
-  --tasks /ABS/PATH/tasks.json --memory /ABS/PATH/.dream_rsi
-```
-
-Check with `/mcp` inside a session.
-
-### Claude Cowork / claude.ai (remote only)
-
-Cowork connects to **remote** MCP URLs brokered from Anthropic's cloud.
-Serve HTTP, tunnel, add the URL as a custom connector:
-
-```bash
-python3 -m open_dream_rsi mcp --http --host 0.0.0.0 --port 8800 \
-  --tasks /ABS/PATH/tasks.json --memory /ABS/PATH/.dream_rsi
-# tunnel 8800 (tailscale funnel / cloudflared) -> Settings -> Connectors -> Add custom
-```
-
-The endpoint implements the stateless Streamable-HTTP profile (`POST /mcp`,
-one JSON-RPC message per request; `GET /health`). **Treat the URL as a
-credential**: whoever reaches it can queue tasks and spend your LLM budget.
-
-### DeepSeek Harness
-
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`)
-runs external MCP servers through its first-party bridge
-(`@deepseek-ai/dsh-mcp-client`). The bundle is published on npm:
-
-```bash
-dsh plugin --profile web add dsh-open-dream-rsi
-```
-
-The tools appear as `mcp__open_dream_rsi__<tool>` (`odr_status`,
-`odr_recipes`, `odr_lessons`, `odr_add_task`, `odr_run_once`, `odr_dream`).
-The bundle ships the Python server inside the package — only `python3`
-(3.10+) on PATH is required, no pip install. Bundle defaults point
-`--tasks`/`--memory` at `tasks.json`/`.dream_rsi`
-beside the directory `dsh` launches from; override the
-`mcp-open-dream-rsi` row from your profile's `cordis.patch.yml` (same id).
-DSH scrubs the spawned child's environment (names matching
-`KEY|PASSWORD|SECRET|TOKEN` and all `DSH_*`). The bundle's bridge
-(`childEnv()`) re-passes only LLM vars that are **actually set** — an empty
-`ODR_LLM_PRESET=""` never reaches the child, because older ODR releases fed
-it straight into provider selection and died with `Unknown preset ''` —
-and, when the harness process has no `OPENAI_BASE_URL`, points the child at
-its own in-process OpenAI-compatible proxy: every dreamer LLM call is then
-served by the model the harness is already configured with
-(`ctx.llm.stream`), no API keys or presets needed. A real `OPENAI_BASE_URL`
-in the harness env bypasses the proxy (direct mode). The hand-rolled
-overlay re-passes `OPENAI_*`/`ODR_LLM_*` via `process.env.VAR || undefined`
-and lets ODR resolve an endpoint itself (env, a preset like
-`ODR_LLM_PRESET=local`, or the `http://127.0.0.1:8000/v1` auto-detect).
-`toolCallTimeoutMs: 1800000` replaces the 60 s
-default because `odr_run_once`/`odr_dream` cycles run for many minutes.
-
-Prefer a hand-rolled overlay?
-`dsh --patch /ABS/PATH/TO/open-dream-rsi/plugins/deepseek_harness/odr.cordis.yml web`
-inserts the same row with explicit absolute paths (a remote Streamable-HTTP
-variant, `odr-http.cordis.yml`, points at the `mcp --http` endpoint — the
-URL is a credential, same caveat as Cowork below). Full walkthrough:
-[plugins/deepseek_harness/README.md](plugins/deepseek_harness/README.md).
-
-### Zero configuration (all of them)
-
-`odr_run_once` resolves the brain automatically, in this order:
-
-1. `OPENAI_BASE_URL` / `OPENAI_API_KEY` in the server's environment,
-2. **your local goose config** (`~/.config/goose`: `active_provider` +
-   `providers:` block + `custom_providers/*.json` + `secrets.yaml` + macOS
-   keychain) — read from disk, so it survives the env scrubbing that
-   Hermes/Codex/Claude Code apply to spawned servers,
-3. `http://127.0.0.1:8000/v1` (vLLM/Ollama default).
-
-The served model is auto-detected (`GET /v1/models`) unless pinned.
-Self-hosted endpoints run with hidden reasoning disabled by default
-(`chat_template_kwargs.enable_thinking=false` — a thinking-on Qwen otherwise
-burns the whole completion budget); endpoints that reject the flag get a
-clean automatic retry without it. An empty task queue is a benign no-op
-with a hint, never an error.
-
-Full per-host instructions (including the launchd keep-alive for the goose
-proxy and troubleshooting): **[docs/integrations.md](docs/integrations.md)**.
+Per-host setup — OpenCode, Goose (auto-setup script), Hermes (incl. Docker),
+Codex CLI, Claude Code, Cowork/claude.ai connectors, DeepSeek Harness — plus
+the zero-configuration brain chain and troubleshooting:
+**[docs/integrations.md](docs/integrations.md)**.
 
 ---
 
 ## Providers
-
-The agent talks to any **OpenAI-compatible** `POST {base_url}/chat/completions`
-server. API keys are read **only** from environment variables.
 
 | Provider | Preset | Base URL | Key env var |
 |---|---|---|---|
@@ -431,25 +229,13 @@ server. API keys are read **only** from environment variables.
 | Local (vLLM / Ollama / LM Studio) | `local` | `http://127.0.0.1:8000/v1` | `OPENAI_API_KEY` |
 | Borrowed from goose config | `goose` | resolved from `~/.config/goose` | — |
 
-Cursor has **no public OpenAI-compatible chat endpoint** (a `crsr_…` key is
-for the Cloud Agents API; `api2.cursor.sh` is the IDE's internal gRPC
-backend), so the `cursor` preset targets a local OpenAI-compatible proxy over
-the Cursor login — see **[docs/integrations.md → Cursor](docs/integrations.md)**.
-Since 0.3.0 the default zero-proxy brain is the `cursor-agent` provider: the
-headless Cursor CLI authenticated by your Cursor login — no API key, no
-proxy (`dream --provider cursor-agent`). A machine without the CLI defers
-dream sessions instead of failing. Install the CLI:
-`irm 'https://cursor.com/install?win32=true' | iex` (Windows) or
-`curl https://cursor.com/install -fsS | bash` (macOS/Linux/WSL); verify
-with `cursor-agent --version` in a fresh terminal.
-
 Precedence is always: explicit overrides → environment → **endpoint model
-discovery** (first id from `GET /v1/models`) → preset defaults. A redeployed
-local server is picked up automatically — and a pinned model the endpoint no
-longer serves self-heals: the client re-discovers once and retries instead
-of failing the whole run. Self-hosted reasoning endpoints get
-`enable_thinking: false` automatically; an HTTP 400 rejection of that flag
-triggers a self-heal retry.
+discovery** (first id from `GET /v1/models`) → preset defaults; a pinned
+model the endpoint no longer serves self-heals by re-discovering once.
+Cursor has no public OpenAI-compatible chat endpoint — the `cursor` preset
+targets a local proxy over the Cursor login, and since 0.3.0 the default
+zero-proxy brain is the `cursor-agent` CLI. Full prose and CLI install:
+**[docs/integrations.md](docs/integrations.md)**.
 
 Library-level use (no CLI):
 
@@ -533,7 +319,11 @@ eval pass on official validation rows 102–181 (79 tasks, 60 hard),
 configuration unchanged from the dev split; official test split never
 touched. Arms interleaved task-by-task per pass (paired, McNemar-ready).
 The gate arm is *choice removal*, not persuasion: past 36 of 45 tool calls
-the sandbox refuses to serve (all text channels off).
+the sandbox refuses to serve (all text channels off). The gate alone is the
+entire arm — no policy, recipe or lesson text enters these episodes — so the
+delta measures the fixed call-cutoff intervention itself, not learned
+content; the learned machinery is validated separately on the scripted
+suites above.
 
 | split | arm | delivered plans | commonsense pass | hard pass | final pass |
 |---|---|---|---|---|---|
@@ -543,7 +333,11 @@ the sandbox refuses to serve (all text channels off).
 | **eval (79)** | gate | **74/79 (94%)** | 40 | 17 | **21.5%** |
 
 McNemar on paired delivery: eval 56↔0 discordant, p=1.4e-17 (train 28↔2,
-p=4.3e-7).
+p=4.3e-7). 95% Wilson intervals on the eval split: delivery 22.8%
+[14.9, 33.2] → 93.7% [86.0, 97.3]; final pass 7.6% [3.5, 15.6] → 21.5%
+[13.9, 31.8]. 79 eval tasks, one model, one benchmark: the delivery
+contrast is the decisive effect; the final-pass point estimates carry wide
+intervals and no cross-model replication yet.
 
 ![goose × TravelPlanner: delivery + failure anatomy](docs/figures/fig_tp.png)
 
@@ -598,10 +392,6 @@ exploration from luck, so `bench-policy` hides each fix behind a
 forever). A score-greedy loop locks onto the decoy and starves; escaping
 requires structural exploration. Six arms, one scripted solver, one budget:
 
-```bash
-python -m open_dream_rsi bench-policy --cycles 8 --format md
-```
-
 | arm | solves | solve rate | API calls | calls / solve | policy calls | curator calls |
 |---|---|---|---|---|---|---|
 | greedy | 0/120 | 0% | 480 | ∞ | 0 | 0 |
@@ -611,40 +401,15 @@ python -m open_dream_rsi bench-policy --cycles 8 --format md
 | **thought_guided** | **120/120** | **100%** | **164** | **1.37** | 0 | 0 |
 | **sentinel_guided** | **102/120** | **85%** | 219 | 2.15 | 15 | 0 |
 
-- **evolved_policy** — the loop asks the LLM for a policy program per
-  category, validates and replay-scores it, and promotes only on evidence.
-  100% solve rate by cycle 5 while spending *fewer total calls* than ε
-  wasted on luck.
-- **knowledge_curator** — ε-greedy with zero policy calls: every escape
-  above the ε baseline came from remembered knowledge (72%, at parity with
-  the gated policies at ~80% of ε's calls).
-- **thought_guided** (library default) — each attempt records its one-line
-  `PLAN:`; expansion leaves a branch as soon as its idea repeats itself.
-  With ε forced to 0 and no policy/curator calls it escapes every trap
-  **from cycle 1**; the ledger-only ablation (same text in prompts, pick
-  disabled) collapses back to the baselines — the win is the expansion
-  rule, not prompt length.
-- **sentinel_guided** — replay-gated policies on a tree that carries
-  structured Sentinel facts: nodes whose error class keeps repeating are
-  recorded **blocked** (choice removal, the TravelPlanner-measured
-  mechanism), and the promoted policy reads `sentinel_blocked` and skips
-  them. 85% at 2.15 calls/solve with ε = 0 and zero curator calls; the
-  engine-off ablation (same policy code, no facts) falls to 75/120 — the win
-  is the features, not the code.
+```bash
+python -m open_dream_rsi bench-policy --cycles 8 --format md
+```
+
+The per-arm explanations and ablations (ledger-only, engine-off), the pinned
+invariants, and the `gate-replay` promotion-rule replayer:
+**[docs/self-checks.md](docs/self-checks.md)**.
 
 ![Decoy-trap suite: per-cycle solve rate, six arms](docs/screenshots/odr_policy_bench.png)
-
-### `gate-replay` — would a lesson set have been promoted?
-
-Applies the shipped promotion rule (`lesson_gate_verdict`) to per-task
-outcome pairs from any recorded replay harness — no model, no GPU:
-
-```bash
-python -m open_dream_rsi gate-replay \
-  --baseline cold=/tmp/arms.json?label=cold \
-  --compare lessons=/tmp/arms.json?label=warm \
-  --key task_id --format md
-```
 
 ---
 
@@ -906,6 +671,11 @@ sources set `ODR_SANDBOX_CMD` to a
 (e.g. `bwrap --unshare-all --die-with-parent --ro-bind / /`) or run the
 loop inside a container.
 
+On non-POSIX hosts (Windows) the same `python -I` child runs, but there are
+no rlimits and the timeout kills only the direct child — treat Windows as
+out of scope for hostile task sources. When `ODR_SANDBOX_CMD` is unset,
+each fresh process logs a one-time warning naming exactly this gap.
+
 ---
 
 ## Live dashboard
@@ -921,6 +691,10 @@ python -m open_dream_rsi dashboard --host 0.0.0.0    # LAN access
 Dark single-page UI: KPIs (cycles / solved / API budget / dream iterations),
 live event feed, per-task attempt boards with score bars and code diff-downs,
 dreamed-policy gauges per category and the learned recipe library.
+
+The dashboard is a plain unauthenticated stdlib HTTP server whose control
+routes (`/api/pause`, `/api/reset`) mutate the running loop — keep `--host`
+on loopback unless the LAN is trusted.
 
 ---
 
@@ -986,10 +760,13 @@ dreamed-policy gauges per category and the learned recipe library.
 ## Tests
 
 ```bash
-python -m unittest discover -s tests
+python -m unittest discover -s tests      # full suite, ~2 min
+python scripts/fast_tests.py              # fast subset (slow bench/sandbox modules excluded), ~15 s
 ```
 
-357 tests, stdlib-only: benchmark behavioural contracts
+359 tests at this commit, re-counted by CI on every push (the badge above
+shows the last green run, not a live count). Stdlib-only: benchmark
+behavioural contracts
 (greedy must solve nothing; the gated arm must dominate ε; the rollout must
 be prefix-only), sandbox escape regressions, gate semantics, MCP protocol,
 goose config dialects, sentinel channel semantics (nudge fires once per

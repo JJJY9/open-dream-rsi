@@ -21,6 +21,7 @@ container) so the OS enforces what the AST gate cannot.
 
 from __future__ import annotations
 
+import logging
 import os
 import shlex
 import signal
@@ -128,6 +129,31 @@ def jail_prefix() -> List[str]:
     return shlex.split(raw) if raw else []
 
 
+#: Set once the no-jail warning has been logged in this process.
+_JAIL_WARNED = False
+
+
+def _warn_no_jail_once() -> None:
+    """Log a one-time warning when generated code runs without a jail.
+
+    ``python -I`` plus rlimits is defence in depth only: it does NOT restrict
+    filesystem or network access. Deployments that ingest hostile task
+    sources should set ``ODR_SANDBOX_CMD`` or containerise the loop (see
+    ``SECURITY.md``).
+    """
+    global _JAIL_WARNED
+    if _JAIL_WARNED or jail_prefix():
+        return
+    _JAIL_WARNED = True
+    logging.getLogger(__name__).warning(
+        "ODR_SANDBOX_CMD is unset: generated code runs with process isolation "
+        "only (python -I, rlimits, process-group kill) and NO filesystem or "
+        "network restriction. For hostile task sources set ODR_SANDBOX_CMD "
+        "(e.g. 'bwrap --unshare-all --die-with-parent --ro-bind / /') or run "
+        "the loop inside a container - see SECURITY.md."
+    )
+
+
 def run_isolated(
     argv: List[str],
     *,
@@ -143,7 +169,12 @@ def run_isolated(
 
     Raises the same :class:`subprocess.TimeoutExpired` as ``subprocess.run``
     so callers keep their existing handling.
+
+    POSIX gets the full wall (rlimits + whole-process-group kill); on Windows
+    there are no rlimits and the timeout kills only the direct child — treat
+    Windows as out of scope for hostile task sources.
     """
+    _warn_no_jail_once()
     argv = [*jail_prefix(), *argv]
     env = SANDBOX_ENV if env is None else env
     kwargs = {}

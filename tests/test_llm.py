@@ -44,6 +44,7 @@ class SelfHealTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.srv.shutdown()
+        cls.srv.server_close()
 
     def test_400_on_extra_payload_retries_plain_and_persists(self):
         SEEN.clear()
@@ -108,6 +109,7 @@ class ModelDiscoveryTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.srv.shutdown()
+        cls.srv.server_close()
 
     def setUp(self):
         self._saved = {k: os.environ.get(k) for k in
@@ -161,6 +163,7 @@ class CursorPresetTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.srv.shutdown()
+        cls.srv.server_close()
 
     def setUp(self):
         self._saved = {k: os.environ.get(k) for k in
@@ -240,6 +243,7 @@ class StaleModelSelfHealTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.srv.shutdown()
+        cls.srv.server_close()
 
     def setUp(self):
         SEEN.clear()

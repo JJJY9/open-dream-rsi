@@ -4,6 +4,7 @@ Spawns open_dream_rsi.mcp_server as a subprocess with a tiny fake sandbox
 (no bench fixtures needed: SPOLKI_SERVE unset -> only sentinel_check),
 speaks JSON-RPC over pipes, asserts protocol + sentinel semantics.
 """
+import contextlib
 import json
 import os
 import subprocess
@@ -45,6 +46,13 @@ class McpServerTest(unittest.TestCase):
             finally:
                 proc.terminate()
                 proc.wait(timeout=5)
+                # Close the pipe handles too — Popen objects do not close
+                # them on their own, and leaked fds surface as
+                # ResourceWarnings at interpreter shutdown.
+                for handle in (proc.stdin, proc.stdout):
+                    if handle is not None:
+                        with contextlib.suppress(OSError):
+                            handle.close()
 
     def test_handshake_and_tool_list(self):
         replies, _ = self._serve({"SENTINEL_SESSION": "t1"}, [

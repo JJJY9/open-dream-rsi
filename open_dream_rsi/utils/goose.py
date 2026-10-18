@@ -26,7 +26,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 #: Env var that overrides the goose config dir (useful in tests / CI).
 CONFIG_DIR_ENV = "ODR_GOOSE_CONFIG_DIR"

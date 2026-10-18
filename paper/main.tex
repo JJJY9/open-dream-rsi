@@ -72,7 +72,7 @@ solves \textbf{0/120} and replay-gated policies reach 77\%)---is stated as a
 deterministic \emph{machinery self-check}, a regression contract for gates,
 sandboxes and promotion logic, not a model-quality claim; we state this
 distinction explicitly. The package has zero runtime dependencies,
-${\sim}6.4$k lines of library code, ${\sim}3.1$k lines of tests (244
+${\sim}9.8$k lines of library code, ${\sim}5.4$k lines of tests (359
 passing), a live dashboard, and a single CLI.
 \end{abstract}
 
@@ -151,8 +151,8 @@ model-quality evidence.
 
 \section{System architecture}
 
-The package is ${\sim}6.4$k lines of pure-Python with no runtime dependencies
-(standard library only, including the LLM client) and ${\sim}3.1$k lines of tests.
+The package is ${\sim}9.8$k lines of pure-Python with no runtime dependencies
+(standard library only, including the LLM client) and ${\sim}5.4$k lines of tests.
 Modules:
 
 \begin{itemize}
@@ -816,7 +816,11 @@ configuration. McNemar on paired delivery --- eval split: 56 discordant
 pairs, all 56 favouring the gate ($p{=}1.4{\times}10^{-17}$); train split:
 28 vs.\ 2 ($p{=}4.3{\times}10^{-7}$). Delivery is the mechanical effect of
 the gate; final pass rate $\times$ delivery is what a user receives: 7.6\%
-$\to$ 21.5\%, a 2.8$\times$ improvement on the eval split.}
+$\to$ 21.5\%, a 2.8$\times$ improvement on the eval split. 95\% Wilson
+intervals on the eval split: delivery 22.8\% [14.9, 33.2] $\to$ 93.7\%
+[86.0, 97.3]; final pass 7.6\% [3.5, 15.6] $\to$ 21.5\% [13.9, 31.8] ---
+wide intervals on the final-pass point estimates, single-model evidence,
+no cross-model replication yet.}
 \label{tab:tp}
 \end{table}
 
@@ -858,7 +862,7 @@ reproduces every number in this section to the task. Summary fixture:
 
 \subsection{Test suite}
 
-244 tests + 10 subtests pass (${\sim}3.1$k non-blank LOC in the tests), including the self-checks' behavioural
+359 tests pass (${\sim}5.4$k non-blank LOC in the tests), including the self-checks' behavioural
 contracts:
 trap-family scores equal their constructed values; the greedy arm must solve
 nothing; the gated-policy arm must dominate $\varepsilon$; the replay rollout

@@ -24,9 +24,17 @@ Thanks for your interest in Open Dream-RSI.
    README/paper tables **in the same commit**.
 3. Run locally:
    ```bash
-   python -m unittest discover -s tests          # ~350 tests, ~2 min
+   python -m unittest discover -s tests          # full suite, ~2 min
+   python scripts/fast_tests.py                  # fast subset (slow bench/sandbox modules excluded), ~15 s
    python examples/live_loop_demo.py             # key-free end-to-end demo
    python -m open_dream_rsi bench --cycles 10 --markdown
+   ```
+   CI also runs a pinned ruff pass (`E9,F63,F7,F82,F401,F841`) and a
+   byte-equality check between `open_dream_rsi/` and the vendored npm
+   bundle copy — run both before pushing:
+   ```bash
+   ruff check --select E9,F63,F7,F82,F401,F841 open_dream_rsi plugins examples scripts tests
+   python -m unittest tests.test_vendored_drift
    ```
 4. Keep diffs focused. One idea per PR.
 

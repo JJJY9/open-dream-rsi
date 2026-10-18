@@ -7,14 +7,12 @@ Covers the three gaps the review found:
 Plus the promotion-gate fix: the incumbent is re-scored on the CURRENT tree.
 """
 
-import json
 import sys
 import time
 import unittest
 from pathlib import Path
 
 from open_dream_rsi.core.policygen import (
-    PolicySandbox,
     PolicyValidationError,
     validate_policy_source,
 )

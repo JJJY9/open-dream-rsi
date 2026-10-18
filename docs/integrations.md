@@ -78,6 +78,7 @@ The six tools the agent sees:
 | `odr_lessons` | curated failure lessons for a category / search query |
 | `odr_add_task` | queue a task (prompt + tests, or prompt + criteria) for the dreamer — test-less tasks are completion-judged |
 | `odr_run_once` | run one improvement cycle now (bounded API budget) |
+| `odr_dream` | the automated cycle: import host session evidence, distill curated lessons, run the promotion gate, publish skills |
 
 `odr_run_once` runs with **thought-conditioned branching enabled by
 default** (like the library itself): attempts record their one-line `PLAN:`,

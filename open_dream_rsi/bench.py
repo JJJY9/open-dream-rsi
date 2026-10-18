@@ -19,8 +19,8 @@ import json
 import shutil
 import tempfile
 import time
-from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional
 
 from open_dream_rsi.loop import AutoRSIRuntime, Task
 from open_dream_rsi.memory import DreamMemory

@@ -5,7 +5,6 @@ import unittest
 
 from open_dream_rsi.core.curator import (
     curate_lessons,
-    format_lessons,
     has_stop_clause,
     lesson_gate_verdict,
     lesson_key,

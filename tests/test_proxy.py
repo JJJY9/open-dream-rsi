@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from open_dream_rsi.proxy import ProxyState, forward_chat_completions, serve
+from open_dream_rsi.proxy import forward_chat_completions, serve
 from open_dream_rsi.utils.goose import (
     GooseConfigError, resolve_goose)
 
@@ -131,7 +131,7 @@ class ResolverTests(unittest.TestCase):
     def test_active_provider_desktop_format(self):
         # goose desktop app format: active_provider + nested providers: block
         with TemporaryDirectory() as tmp:
-            cdir = make_fake_goose_dir(Path(tmp), secret_name="SPARK_API_KEY")
+            make_fake_goose_dir(Path(tmp), secret_name="SPARK_API_KEY")
             cfg = Path(tmp, "config.yaml")
             cfg.write_text(
                 "active_provider: custom_example-1\n"
@@ -222,6 +222,7 @@ class ProxyTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.proxy.shutdown(); cls.upstream.shutdown()
+        cls.proxy.server_close(); cls.upstream.server_close()
 
     def _post(self, path, payload):
         req = urllib.request.Request(
@@ -302,6 +303,7 @@ class ProxyTests(unittest.TestCase):
         proxy, state = serve("127.0.0.1", 0, passthrough_models=True)
         port = proxy.server_address[1]
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
+        self.addCleanup(proxy.server_close)
         self.addCleanup(proxy.shutdown)
         MOCK_LOG.clear()
         req = urllib.request.Request(
@@ -359,6 +361,7 @@ class ProxyTests(unittest.TestCase):
             proxy, state = serve("127.0.0.1", 0)
             port = proxy.server_address[1]
             threading.Thread(target=proxy.serve_forever, daemon=True).start()
+            self.addCleanup(proxy.server_close)
             self.addCleanup(proxy.shutdown)
             req = urllib.request.Request(
                 f"http://127.0.0.1:{port}/v1/chat/completions",

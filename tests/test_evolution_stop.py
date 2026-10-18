@@ -48,7 +48,7 @@ class StopperTest(unittest.TestCase):
             st.observe("dead", promoted=False)
         self.assertTrue(st.is_frozen("dead"))
         rounds_before = st._state["dead"]["rounds"]
-        d = st.observe("dead", promoted=False)
+        st.observe("dead", promoted=False)
         self.assertEqual(st._state["dead"]["rounds"], rounds_before)  # frozen: no count
         st.reset("dead")
         self.assertFalse(st.is_frozen("dead"))

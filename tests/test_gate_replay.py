@@ -156,11 +156,12 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             base_p = os.path.join(d, "cold.json")
             arm_p = os.path.join(d, "warm.json")
-            json.dump([{"krs": "a", "solved": True},
-                       {"krs": "b", "solved": True}], open(base_p, "w"))
-            json.dump({"warm": [{"krs": "a", "solved": False},
-                                {"krs": "b", "solved": False}]},
-                      open(arm_p, "w"))
+            with open(base_p, "w") as fh:
+                json.dump([{"krs": "a", "solved": True},
+                           {"krs": "b", "solved": True}], fh)
+            with open(arm_p, "w") as fh:
+                json.dump({"warm": [{"krs": "a", "solved": False},
+                                    {"krs": "b", "solved": False}]}, fh)
             proc = subprocess.run(
                 [sys.executable, "-m", "open_dream_rsi", "gate-replay",
                  "--baseline", f"cold={base_p}",

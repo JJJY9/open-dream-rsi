@@ -53,7 +53,7 @@ class LoopTest(unittest.TestCase):
 
     @staticmethod
     def _tmp_name():
-        import tempfile, os
+        import tempfile
         d = tempfile.mkdtemp(prefix="odr-test-")
         return f"{d}/mem"
 

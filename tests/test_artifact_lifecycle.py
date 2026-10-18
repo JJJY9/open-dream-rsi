@@ -21,7 +21,6 @@ from open_dream_rsi.lifecycle import (
     ArtifactLifecycleError,
     ArtifactLifecycleManager,
     InvalidTransitionError,
-    rebuild_artifact_state,
 )
 
 GOOD_LESSON = {"trigger": "median even",

@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, runtime_checkable
+from typing import Callable, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 
 from open_dream_rsi.core.tree import DiscoveryTree
 from open_dream_rsi.core.dreamer import DreamEngine

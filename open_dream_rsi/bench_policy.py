@@ -42,7 +42,7 @@ import re
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Sequence
 
 from pathlib import Path
 

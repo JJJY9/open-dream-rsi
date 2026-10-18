@@ -202,7 +202,8 @@ class TestEpisodeRoundTrip(unittest.TestCase):
                                               timestamp=1.0)])]
             path = Path(tmp) / "ep.jsonl"
             self.assertEqual(write_episodes(eps, path), 1)
-            path.open("a").write("garbage-not-json\n")  # resilience
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write("garbage-not-json\n")  # resilience
             got = load_episodes(path)
             self.assertEqual(len(got), 1)
             self.assertEqual(got[0].messages[0].text, "hi")

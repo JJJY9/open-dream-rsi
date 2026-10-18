@@ -24,7 +24,9 @@ complete against code that was not statically gated. If you feed the loop
 **hostile task sources**, wrap every spawn with `ODR_SANDBOX_CMD` (e.g.
 [bubblewrap](https://github.com/containers/bubblewrap):
 `bwrap --unshare-all --die-with-parent --ro-bind / /`) or run the loop inside
-a container.
+a container. When `ODR_SANDBOX_CMD` is unset, the sandbox logs a **one-time
+warning** at the first spawn in each process, so the gap is visible in logs
+instead of silent.
 
 ## The MCP server is a trust boundary
 

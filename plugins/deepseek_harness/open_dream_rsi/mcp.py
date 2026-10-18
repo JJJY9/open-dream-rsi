@@ -28,7 +28,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 PROTOCOL_VERSION = "2025-06-18"
 SERVER_NAME = "open-dream-rsi"

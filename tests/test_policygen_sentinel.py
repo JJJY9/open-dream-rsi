@@ -154,7 +154,7 @@ class TestRolloutCarriesFeatures(unittest.TestCase):
         """loop._frontier delegates to frontier_entry (same code path), so
         online and replay show identical field sets — pinned via the
         runtime helper the loop uses."""
-        from open_dream_rsi.loop import AutoRSIRuntime, DreamMemory, Task
+        from open_dream_rsi.loop import AutoRSIRuntime, DreamMemory
         import tempfile
         mem = DreamMemory(tempfile.mkdtemp())
         rt = AutoRSIRuntime(client=None, memory=mem, tasks=[])
