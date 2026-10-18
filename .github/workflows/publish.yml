@@ -51,6 +51,13 @@ jobs:
           python -m pip install build twine
           python -m build
           twine check dist/*
+      - name: Skip publish when this version is already on PyPI (idempotent re-tags)
+        run: |
+          set -o pipefail
+          VERSION=$(python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          python -c "import json, urllib.request, sys; published = json.load(urllib.request.urlopen('https://pypi.org/pypi/open-dream-rsi/json'))['info']['version']; sys.exit(0 if published == '$VERSION' else 1)" \
+            && { echo "version $VERSION already on PyPI — publish steps will be skipped"; echo "ALREADY_PUBLISHED=true" >> "$GITHUB_ENV"; } \
+            || echo "version $VERSION not on PyPI yet — publishing"
       - name: Determine credential mode
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
