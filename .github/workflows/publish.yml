@@ -1,0 +1,57 @@
+name: Publish to PyPI
+
+# Publishes on version tags (v0.3.8 ...). Credentials: EITHER a PyPI
+# trusted publisher registered at
+# https://pypi.org/manage/account/publishing/ (owner patrykorwat,
+# repository open-dream-rsi, workflow publish.yml — no secret needed),
+# OR a classic API token stored as the repo secret PYPI_API_TOKEN.
+# Both paths are wired below; the workflow picks whichever exists.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    name: Build and publish (tag ${{ github.ref_name }})
+    runs-on: ubuntu-latest
+    permissions:
+      # OIDC token exchange for PyPI trusted publishing.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Tag matches pyproject version
+        run: |
+          set -o pipefail
+          VERSION=$(python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          echo "tag: ${GITHUB_REF_NAME}, package version: ${VERSION}"
+          test "${GITHUB_REF_NAME#v}" = "$VERSION" || {
+            echo "::error::tag ${GITHUB_REF_NAME} does not match pyproject version ${VERSION} — retag or bump the version."
+            exit 1
+          }
+      - name: Version sync across release files
+        run: |
+          set -o pipefail
+          python scripts/check_versions.py
+      - name: Build sdist + wheel, validate metadata
+        run: |
+          set -o pipefail
+          python -m pip install build twine
+          python -m build
+          twine check dist/*
+      # Exactly one of the two steps below runs: trusted publishing when no
+      # token secret is configured, the token path otherwise.
+      - name: Publish (trusted publishing, OIDC — no stored secret)
+        if: ${{ secrets.PYPI_API_TOKEN == '' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Publish (API token fallback)
+        if: ${{ secrets.PYPI_API_TOKEN != '' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

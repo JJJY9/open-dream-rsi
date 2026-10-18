@@ -49,3 +49,22 @@ between *that* benchmark and the scripted self-checks intact.
 Look for the [`good first issue`](/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 label. Docs fixes, integration examples, and reproduction tests are always
 welcome.
+
+## Releasing (maintainers)
+
+1. Bump the version in **all** carrier files — `pyproject.toml`,
+   `open_dream_rsi/__init__.py`, `.cursor-plugin/plugin.json`,
+   `.cursor-plugin/marketplace.json` (both `metadata.version` and the plugin
+   entry), `plugins/deepseek_harness/package.json` — and mirror any changed
+   files into `plugins/deepseek_harness/open_dream_rsi/`. `python
+   scripts/check_versions.py` verifies the sync (CI enforces it too).
+2. Push `main`, wait for CI green.
+3. Push the version tag: `git tag v0.3.8 && git push origin v0.3.8`
+   (tag must equal the pyproject version, `v` prefix).
+4. `.github/workflows/publish.yml` builds the sdist/wheel, runs
+   `twine check`, and publishes to PyPI via **trusted publishing** —
+   no stored credentials. First-time setup: add a pending trusted
+   publisher at <https://pypi.org/manage/account/publishing/> (owner
+   `patrykorwat`, repository `open-dream-rsi`, workflow `publish.yml`,
+   environment left blank). Verify after: `pip index versions
+   open-dream-rsi` or the project page.

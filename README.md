@@ -130,10 +130,13 @@ pip install -e .
 ```
 
 Or without a clone: `pip install
-git+https://github.com/patrykorwat/open-dream-rsi`. There is **no PyPI
-release**: the name `dreamrsi` there belongs to an unrelated project (see
-[Positioning](#positioning)); this library is the open implementation of the
-Dream-RSI paper (official repo:
+git+https://github.com/patrykorwat/open-dream-rsi`. **PyPI releases are
+tag-driven**: pushing a `v*` tag (e.g. `v0.3.8`) builds the sdist/wheel,
+validates metadata, and publishes the `open-dream-rsi` project via trusted
+publishing (`.github/workflows/publish.yml`) — no stored credentials.
+Until the first tag is published, install from the repo. The name
+`dreamrsi` on PyPI belongs to an unrelated project; this library is the
+open implementation of the Dream-RSI paper (official repo:
 [zhengkid/Dream-RSI](https://github.com/zhengkid/Dream-RSI)).
 
 **Point it at a model — or don't.** Any OpenAI-compatible endpoint works;
