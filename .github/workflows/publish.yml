@@ -6,6 +6,8 @@ name: Publish to PyPI
 # repository open-dream-rsi, workflow publish.yml — no secret needed),
 # OR a classic API token stored as the repo secret PYPI_API_TOKEN.
 # Both paths are wired below; the workflow picks whichever exists.
+# NOTE: the `secrets` context is NOT available in step-level `if:`
+# conditionals, so the mode is resolved into GITHUB_ENV first.
 
 on:
   push:
@@ -45,13 +47,20 @@ jobs:
           python -m pip install build twine
           python -m build
           twine check dist/*
-      # Exactly one of the two steps below runs: trusted publishing when no
-      # token secret is configured, the token path otherwise.
+      - name: Determine credential mode
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [ -n "$PYPI_TOKEN" ]; then
+            echo "PUBLISH_MODE=token" >> "$GITHUB_ENV"
+          else
+            echo "PUBLISH_MODE=trusted" >> "$GITHUB_ENV"
+          fi
       - name: Publish (trusted publishing, OIDC — no stored secret)
-        if: ${{ secrets.PYPI_API_TOKEN == '' }}
+        if: env.PUBLISH_MODE == 'trusted'
         uses: pypa/gh-action-pypi-publish@release/v1
       - name: Publish (API token fallback)
-        if: ${{ secrets.PYPI_API_TOKEN != '' }}
+        if: env.PUBLISH_MODE == 'token'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
