@@ -9,6 +9,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-359%20passing-brightgreen)](tests/)
+[![PyPI](https://img.shields.io/pypi/v/open-dream-rsi)](https://pypi.org/project/open-dream-rsi/)
 
 ## What is this?
 
@@ -124,19 +125,22 @@ falls back to the greedy baseline.
 ## Quick start
 
 ```bash
+pip install open-dream-rsi        # 0.3.8 on PyPI
+```
+
+or from a checkout:
+
+```bash
 git clone https://github.com/patrykorwat/open-dream-rsi.git
 cd open-dream-rsi
 pip install -e .
 ```
 
-Or without a clone: `pip install
-git+https://github.com/patrykorwat/open-dream-rsi`. **PyPI releases are
-tag-driven**: pushing a `v*` tag (e.g. `v0.3.8`) builds the sdist/wheel,
-validates metadata, and publishes the `open-dream-rsi` project via trusted
-publishing (`.github/workflows/publish.yml`) — no stored credentials.
-Until the first tag is published, install from the repo. The name
-`dreamrsi` on PyPI belongs to an unrelated project; this library is the
-open implementation of the Dream-RSI paper (official repo:
+Or straight from PyPI: `pip install open-dream-rsi` — releases are
+tag-driven (push `v*` → build, `twine check`, publish via trusted
+publishing, `.github/workflows/publish.yml`; no stored credentials).
+The name `dreamrsi` on PyPI belongs to an unrelated project; this library
+is the open implementation of the Dream-RSI paper (official repo:
 [zhengkid/Dream-RSI](https://github.com/zhengkid/Dream-RSI)).
 
 **Point it at a model — or don't.** Any OpenAI-compatible endpoint works;
