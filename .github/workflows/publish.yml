@@ -8,6 +8,10 @@ name: Publish to PyPI
 # Both paths are wired below; the workflow picks whichever exists.
 # NOTE: the `secrets` context is NOT available in step-level `if:`
 # conditionals, so the mode is resolved into GITHUB_ENV first.
+# A second job in this file publishes the npm bundle
+# (dsh-open-dream-rsi) with npm trusted publishing: npm validates the
+# WORKFLOW FILE name in the OIDC claims, so the npm publisher is
+# registered against this same publish.yml (one file, both registries).
 
 on:
   push:
@@ -57,10 +61,53 @@ jobs:
             echo "PUBLISH_MODE=trusted" >> "$GITHUB_ENV"
           fi
       - name: Publish (trusted publishing, OIDC — no stored secret)
-        if: env.PUBLISH_MODE == 'trusted'
+        if: env.PUBLISH_MODE == 'trusted' && env.ALREADY_PUBLISHED != 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
       - name: Publish (API token fallback)
-        if: env.PUBLISH_MODE == 'token'
+        if: env.PUBLISH_MODE == 'token' && env.ALREADY_PUBLISHED != 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
+
+  publish-npm:
+    name: Publish npm bundle (dsh-open-dream-rsi)
+    runs-on: ubuntu-latest
+    permissions:
+      # OIDC token exchange for npm trusted publishing.
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - name: Version guards (sync across carriers + tag parity)
+        run: |
+          set -o pipefail
+          python3 scripts/check_versions.py
+          TAG=$(git describe --tags --exact-match HEAD)
+          NPM_VERSION=$(node -p "require('./plugins/deepseek_harness/package.json').version")
+          echo "tag: $TAG, npm version: $NPM_VERSION"
+          test "${TAG#v}" = "$NPM_VERSION" || {
+            echo "::error::tag $TAG does not match the npm version $NPM_VERSION — retag or bump the version."
+            exit 1
+          }
+      - name: Tarball dry-run (pack list)
+        run: |
+          set -o pipefail
+          cd plugins/deepseek_harness
+          npm pack --dry-run
+      - name: Skip when this version is already the latest on npm
+        run: |
+          set -o pipefail
+          NPM_VERSION=$(node -p "require('./plugins/deepseek_harness/package.json').version")
+          LATEST=$(npm view dsh-open-dream-rsi version 2>/dev/null || echo none)
+          if [ "$LATEST" = "$NPM_VERSION" ]; then
+            echo "version $NPM_VERSION is already the latest on npm — skipping publish"
+            echo "NPM_ALREADY_PUBLISHED=true" >> "$GITHUB_ENV"
+          fi
+      - name: Publish to npm (trusted publishing, OIDC — no stored token)
+        if: env.NPM_ALREADY_PUBLISHED != 'true'
+        run: npm publish
+        working-directory: plugins/deepseek_harness
