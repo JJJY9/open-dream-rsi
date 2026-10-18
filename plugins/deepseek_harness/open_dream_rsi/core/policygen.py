@@ -61,7 +61,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from open_dream_rsi.core.tree import DiscoveryTree
-from open_dream_rsi.sandbox import run_isolated
+from open_dream_rsi.sandbox import (SandboxCache, cached_run_isolated,
+                                    content_key, run_isolated)
 
 #: Weight of branch diversity in the rollout score (the paper's beta_2:
 #: replay objectives reward visiting *different* branches, not just high-
@@ -289,8 +290,11 @@ class PolicySandbox:
     gated by :func:`validate_policy_source` before we ever spawn a process.
     """
 
-    def __init__(self, timeout: float = 5.0):
+    def __init__(self, timeout: float = 5.0,
+                 cache: Optional[SandboxCache] = None):
         self.timeout = timeout
+        #: Optional content-addressed result cache (opt-in; None = uncached).
+        self.cache = cache
 
     def choose(self, source: str, frontier: List[Dict[str, Any]], step: int) -> PolicyRun:
         try:
@@ -305,10 +309,14 @@ class PolicySandbox:
         fr_path.write_text(json.dumps(frontier), encoding="utf-8")
         harness_path.write_text(_POLICY_HARNESS, encoding="utf-8")
         try:
-            proc = run_isolated(
+            proc = cached_run_isolated(
+                run_isolated,
                 [sys.executable, "-I", str(harness_path), str(src_path), str(fr_path), str(step)],
+                key=content_key({"harness": _POLICY_HARNESS, "policy": source,
+                                 "frontier": frontier}, timeout=self.timeout),
                 timeout=self.timeout,
                 cwd=d,
+                cache=self.cache,
             )
         except subprocess.TimeoutExpired:
             return PolicyRun(None, "policy execution timed out")
@@ -346,10 +354,14 @@ class PolicySandbox:
         world_path.write_text(json.dumps(world), encoding="utf-8")
         harness_path.write_text(_ROLLOUT_HARNESS, encoding="utf-8")
         try:
-            proc = run_isolated(
+            proc = cached_run_isolated(
+                run_isolated,
                 [sys.executable, "-I", str(harness_path), str(src_path), str(world_path)],
+                key=content_key({"harness": _ROLLOUT_HARNESS, "policy": source,
+                                 "world": world}, timeout=self.timeout),
                 timeout=self.timeout,
                 cwd=d,
+                cache=self.cache,
             )
         except subprocess.TimeoutExpired:
             return None, [], 0, "policy rollout timed out"
@@ -635,6 +647,25 @@ Previous candidate rejection reason: {feedback}
 Return an improved complete policy as one python code block."""
 
 
+REVISE_USER_TEMPLATE = """Category: {category}
+
+Your current policy program (the incumbent — keep its successful strategy,
+fix only what the replay feedback indicts):
+```python
+{incumbent}
+```
+
+Replay metrics of the current policy: {metrics}
+
+Discovery history summary ({nodes} nodes, best score {best_score}):
+{summary}
+
+Why the last challenger was rejected: {feedback}
+
+Return a REVISED complete policy as one python code block (full program,
+not a patch)."""
+
+
 @dataclass
 class GenerationResult:
     source: Optional[str]
@@ -664,6 +695,7 @@ class PolicyGenerator:
         incumbent_score: float,
         tree: DiscoveryTree,
         api_calls: Optional[List[int]] = None,
+        revise: bool = False,
     ) -> GenerationResult:
         steps = sum(1 for n in tree.nodes.values() if n.parent_id)
         if steps < 2:
@@ -671,8 +703,13 @@ class PolicyGenerator:
         summary = self._tree_summary(tree)
         feedback = ""
         source: Optional[str] = None
+        user_template = REVISE_USER_TEMPLATE if revise else GEN_USER_TEMPLATE
+        system_prompt = (
+            POLICY_CONTRACT + " You are REVISING the incumbent policy: keep "
+            "its successful strategy, change only what the feedback indicts."
+            if revise else POLICY_CONTRACT)
         for attempt in range(1 + self.max_repair):
-            user = GEN_USER_TEMPLATE.format(
+            user = user_template.format(
                 category=category,
                 incumbent=incumbent_source or "(none — first policy)",
                 metrics=f"{incumbent_score:.4f}",
@@ -686,7 +723,7 @@ class PolicyGenerator:
                 if self.max_tokens:
                     kwargs["max_tokens"] = self.max_tokens
                 reply = self.client.chat(
-                    [{"role": "system", "content": POLICY_CONTRACT},
+                    [{"role": "system", "content": system_prompt},
                      {"role": "user", "content": user}],
                     **kwargs,
                 )
@@ -719,6 +756,50 @@ class PolicyGenerator:
                     f"incumbent {incumbent_score:.4f}")
             return GenerationResult(source, score, "")
         return GenerationResult(None, float("-inf"), feedback or "generation failed")
+
+    @staticmethod
+    def _replay_brief(tree: DiscoveryTree, horizon: Optional[int] = None,
+                      max_steps: int = 24) -> str:
+        """Greedy replay trace: the counterfactual the incumbent must beat.
+
+        Mirrors :func:`_simulate_step_rewards` (greedy pick = best visible
+        score) and reports, per step, what the greedy policy would harvest —
+        the model sees WHERE the greedy replay stalls (repeated exhausted
+        picks, zero-reward steps) and revises against that evidence instead
+        of rewriting blind.
+        """
+        if not tree.nodes:
+            return "(empty)"
+        world = rollout_world_payload(tree, horizon)
+
+        def pick(visible, step):
+            return max(visible, key=lambda e: e["score"])["node_id"] if visible else None
+
+        rewards, picks, _invalid, _err = _simulate_step_rewards(world, pick)
+        lines = []
+        for i, (pick_id, reward) in enumerate(list(zip(picks, rewards))[:max_steps]):
+            repeat = " REPEAT" if picks[:i].count(pick_id) else ""
+            lines.append(f"step {i}: expand {pick_id} -> reward {reward:.3f}{repeat}")
+        exhausted = [p for p in picks if picks.count(p) > 1]
+        if exhausted:
+            lines.append(f"greedy re-picks: {sorted(set(exhausted))[:4]} "
+                         "(exhausted branches — the incumbent camps here)")
+        return "\n".join(lines) or "(no steps)"
+
+    def generate_with_brief(self, category, incumbent_source, incumbent_score,
+                            tree, api_calls=None):
+        """Revise mode with the greedy replay brief as structured feedback.
+
+        A candidate promoted here faced strictly stronger evidence than a
+        blind rewrite: same promotion gate, same strict win requirement —
+        only the prompt carries the incumbent's measured replay trace.
+        """
+        brief = self._replay_brief(tree)
+        result = self.generate(category, incumbent_source, incumbent_score,
+                               tree, api_calls=api_calls, revise=True)
+        if result.source is None and brief:
+            result.error = f"{result.error} | greedy replay: {brief[:200]}".strip(" |")
+        return result
 
     @staticmethod
     def _tree_summary(tree: DiscoveryTree, max_nodes: int = 12) -> str:

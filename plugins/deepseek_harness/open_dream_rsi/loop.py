@@ -201,6 +201,7 @@ class AutoRSIRuntime:
         on_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         max_tokens: int = 2048,
         enable_policy_code: bool = True,
+        policy_revive: bool = False,
         enable_knowledge: bool = True,
         enable_thoughts: bool = True,
         thought_steering: bool = True,
@@ -244,6 +245,12 @@ class AutoRSIRuntime:
         # policy itself; promoted candidates steer tree expansion online.
         self.enable_policy_code = enable_policy_code
         self.policy_sandbox = PolicySandbox()
+        # Revise mode (dream-rsi-sdk-inspired, opt-in): policy generation asks
+        # the LLM to REPAIR the incumbent against replay feedback (structured
+        # greedy-replay brief) instead of rewriting from scratch. Same gate,
+        # same strict win — only the prompt changes. Bench arms pin this OFF
+        # so published arm numbers stay byte-stable.
+        self.policy_revive = policy_revive
         self._policy_gen = PolicyGenerator(client, sandbox=self.policy_sandbox,
                                            max_tokens=max_tokens)
         # Hermes-style knowledge curator: failures are distilled into a
@@ -972,8 +979,12 @@ class AutoRSIRuntime:
         self._emit("policy_gen", task_id=task.task_id, category=task.category,
                    incumbent_score=round(incumbent_score, 4))
         calls = [self.api_calls_used]
-        result = self._policy_gen.generate(
-            task.category, incumbent_source, incumbent_score, tree, api_calls=calls)
+        result = self._policy_gen.generate_with_brief(
+            task.category, incumbent_source, incumbent_score, tree,
+            api_calls=calls) if self.policy_revive else \
+            self._policy_gen.generate(
+                task.category, incumbent_source, incumbent_score, tree,
+                api_calls=calls)
         extra = calls[0] - self.api_calls_used
         report.api_calls += extra
         self.api_calls_used = calls[0]

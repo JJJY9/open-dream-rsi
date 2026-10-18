@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-359%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-390%20passing-brightgreen)](tests/)
 [![PyPI](https://img.shields.io/pypi/v/open-dream-rsi)](https://pypi.org/project/open-dream-rsi/)
 
 ## What is this?
@@ -34,7 +34,7 @@ beats the incumbent. An open implementation of *Recursive Self-Improvement
 through Evolving Worlds* (Dream-RSI, Zheng et al.,
 [arXiv:2609.14858](https://arxiv.org/abs/2609.14858)).
 
-**Zero runtime dependencies** — Python 3.10+ stdlib only, ~9.8k lines of
+**Zero runtime dependencies** — Python 3.10+ stdlib only, ~11.2k lines of
 library code, ~5.4k lines of tests, no build step.
 
 **Not another memory plugin.** Experience-memory systems record what the
@@ -269,6 +269,7 @@ agent = DreamAgent(dreamer=dreamer, client=client)
 | Knowledge base | `lessons.json` | curated, replay-gated lessons (declarative text) |
 | Discovery trees | `trees/` | offline dreaming always has history; nodes optionally carry replay-safe Sentinel facts |
 | Audit log | `events.jsonl` | append-only record of every decision |
+| Holdout reservations | `holdout_reservations.json` | preregistered eval task IDs consumed once (`odr holdout claim/split`) |
 
 Switches worth knowing: `--no-policy-code`, `--no-knowledge`, `--no-thoughts`,
 `--no-judge` ablate the four optional machinery layers; `--evolution-stop`
@@ -644,6 +645,48 @@ aborts the whole import — tampering detected, not trusted; each lesson
 still needs *your* paired-replay gate to reach a prompt). A local directory
 works identically (`--store ./store`) — git is just the transport.
 
+The same store carries replay data and promoted policy programs:
+
+```bash
+# ship archived discovery trees (redacted, length-capped, checksummed) — the
+# counterfactual worlds a policy was judged on, so a reviewer can re-run the
+# promotion offline:
+python -m open_dream_rsi --memory .dream_rsi lessons worlds-export \
+    --store <store> [--task <task_id> ...]
+python -m open_dream_rsi --memory .dream_rsi lessons worlds-import --store <store>
+
+# ship promoted exploration-policy programs (the structural gate applies on
+# export; a redaction that breaks a program makes it unshippable):
+python -m open_dream_rsi --memory .dream_rsi lessons policies-export --store <store>
+python -m open_dream_rsi --memory .dream_rsi lessons policies-import --store <store>
+```
+
+Worlds import as **evidence** into `trees/imported/` — never live tasks,
+never the runtime's `load_tree` path; node fields unknown to `TreeNode` are
+dropped, not trusted. Policy programs register as ALM
+`CANDIDATE -> VALIDATED` — adoption stays the local promotion machinery's
+decision; an import never replaces an incumbent.
+
+### Holdout hygiene: single-use eval reservations
+
+A preregistered evaluation task is consumed ONCE — the selection-contamination
+rule (TravelPlanner protocol) made enforceable instead of procedural:
+
+```bash
+# before phase A starts: reserve the eval split
+python -m open_dream_rsi --memory .dream_rsi holdout claim \
+    --ids 102 103 104 --purpose travelplanner_eval --phase final
+
+# before any later run: partition a task queue into allowed vs held-back
+python -m open_dream_rsi --memory .dream_rsi holdout split --tasks tasks.json
+```
+
+First claim wins: a later phase claiming the same ID for a different purpose
+is refused (same-purpose re-claims are idempotent, so resuming a crashed
+phase loses nothing); `release` is the explicit operator correction, never
+part of the protocol. The loop never reads the registry — the harness that
+owns the preregistered protocol filters with `split`.
+
 ### Full Hermes wiring (what exists today)
 
 | Path | Direction | What it does |
@@ -749,11 +792,13 @@ on loopback unless the LAN is trusted.
 | `dream` | `dream_once` — automated cadence seam: evidence ingest, tier decision, gate + ALM, skills publish; lock-guarded |
 | `lifecycle` | `ArtifactLifecycleManager` — state machine, event-sourced history, lineage, GC |
 | `sessions` | Hermes `state.db` / Cursor `state.vscdb` readers, redaction, lessons→skills bridge |
+| `share` | git-backed stores: lessons + worlds + policy programs (checksummed manifest, staging-only import) |
 | `memory` | `DreamMemory` — policies, recipes, lessons, trees, events |
-| `sandbox` | `run_isolated` — the single untrusted-code execution boundary |
+| `sandbox` | `run_isolated` — the single untrusted-code execution boundary (+ opt-in content-addressed result cache: `SandboxCache`/`content_key`) |
+| `holdout` | single-use eval-task reservations (`claim / release / show / split`) |
 | `tools` | `CodeVerifier` — sandboxed verification of candidate solutions |
 | `llm` | OpenAI-compatible client (stdlib `urllib` transport; model discovery + 404 self-heal) |
-| `cli` | `loop / status / dashboard / bench / bench-policy / gate-replay / mcp / proxy / sentinel` |
+| `cli` | `loop / status / dashboard / bench / bench-policy / gate-replay / mcp / proxy / sentinel / holdout` |
 | `mcp`, `mcp_server` | MCP stdio server for loop tools and sentinel checks |
 | `proxy` | loopback OpenAI-compatible proxy borrowing goose's upstream |
 | `dashboard` | zero-dependency live web UI |
@@ -771,11 +816,13 @@ python -m unittest discover -s tests      # full suite, ~2 min
 python scripts/fast_tests.py              # fast subset (slow bench/sandbox modules excluded), ~15 s
 ```
 
-359 tests at this commit, re-counted by CI on every push (the badge above
+390 tests at this commit, re-counted by CI on every push (the badge above
 shows the last green run, not a live count). Stdlib-only: benchmark
 behavioural contracts
 (greedy must solve nothing; the gated arm must dominate ε; the rollout must
-be prefix-only), sandbox escape regressions, gate semantics, MCP protocol,
+be prefix-only), sandbox escape regressions, sandbox result-cache identity
+contracts, holdout reservation semantics (first-claim-wins, cross-purpose
+refusal), gate semantics, MCP protocol,
 goose config dialects, sentinel channel semantics (nudge fires once per
 budget, merges with recurrence notes, clean calls count toward the budget;
 the permute-gate serves until ceil(0.8·budget) then refuses forever, per

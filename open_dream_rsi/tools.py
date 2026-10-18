@@ -18,9 +18,10 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from open_dream_rsi.sandbox import run_isolated
+from open_dream_rsi.sandbox import (SandboxCache, cached_run_isolated,
+                                    content_key, run_isolated)
 
 VERIFIER_TEMPLATE = """
 import json, sys, traceback
@@ -76,8 +77,11 @@ class CodeVerifier:
     Score = fraction of passing tests; ``solved`` only when every test passes.
     """
 
-    def __init__(self, timeout: float = 10.0):
+    def __init__(self, timeout: float = 10.0,
+                 cache: Optional["SandboxCache"] = None):
         self.timeout = timeout
+        #: Optional content-addressed result cache (opt-in; None = uncached).
+        self.cache = cache
 
     def smoke_run(self, code: str) -> Dict[str, Any]:
         """Execute candidate code for evidence only (no tests evaluated).
@@ -87,16 +91,21 @@ class CodeVerifier:
         boundary as :meth:`run`.
         """
         script = VERIFIER_TEMPLATE.format(candidate=code, tests=[])
+        key = content_key({"harness": VERIFIER_TEMPLATE, "candidate": code,
+                           "tests": []}, timeout=self.timeout)
         with tempfile.NamedTemporaryFile(
             "w", suffix=".py", delete=False, encoding="utf-8"
         ) as fh:
             fh.write(script)
             path = fh.name
         try:
-            proc = run_isolated(
+            proc = cached_run_isolated(
+                run_isolated,
                 [sys.executable, "-I", path],
+                key=key,
                 timeout=self.timeout,
                 cwd=tempfile.gettempdir(),
+                cache=self.cache,
             )
         except subprocess.TimeoutExpired:
             return {"ok": False, "error": "execution timed out",
@@ -122,16 +131,21 @@ class CodeVerifier:
 
     def run(self, code: str, tests: List[Dict[str, Any]]) -> ToolResult:
         script = VERIFIER_TEMPLATE.format(candidate=code, tests=tests)
+        key = content_key({"harness": VERIFIER_TEMPLATE, "candidate": code,
+                           "tests": tests}, timeout=self.timeout)
         with tempfile.NamedTemporaryFile(
             "w", suffix=".py", delete=False, encoding="utf-8"
         ) as fh:
             fh.write(script)
             path = fh.name
         try:
-            proc = run_isolated(
+            proc = cached_run_isolated(
+                run_isolated,
                 [sys.executable, "-I", path],
+                key=key,
                 timeout=self.timeout,
                 cwd=tempfile.gettempdir(),
+                cache=self.cache,
             )
         except subprocess.TimeoutExpired:
             return ToolResult(False, 0.0, "execution timed out")

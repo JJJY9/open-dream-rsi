@@ -264,10 +264,12 @@ def cmd_dream(args: argparse.Namespace) -> int:
 
 
 def cmd_lessons(args: argparse.Namespace) -> int:
-    """Git-backed lesson stores: publish active lessons, import others'
+    """Git-backed stores: publish lessons/worlds/policies, import others'
     knowledge as staging (see README 'Sharing lessons')."""
     from open_dream_rsi.share import (LessonShareError, export_lessons,
-                                      import_lessons, store_status)
+                                      export_policies, export_worlds,
+                                      import_lessons, import_policies,
+                                      import_worlds, store_status)
 
     memory = DreamMemory(args.memory)
     try:
@@ -284,6 +286,31 @@ def cmd_lessons(args: argparse.Namespace) -> int:
                 print(f"[odr] {cat}: +{n} staging lesson(s) — activate via "
                       f"the paired-replay gate (odr loop)")
             return 0
+        elif args.lessons_cmd == "worlds-export":
+            st = export_worlds(memory, args.store, task_ids=args.task,
+                               message=args.message, push=not args.no_push)
+        elif args.lessons_cmd == "worlds-import":
+            counts = import_worlds(args.store, memory, task_ids=args.task)
+            if not counts:
+                print("[odr] nothing imported (empty/filtered store)")
+                return 0
+            for tid, n in sorted(counts.items()):
+                print(f"[odr] {tid}: imported world ({n} nodes) -> "
+                      f"trees/imported/{tid}.json (evidence, never a live task)")
+            return 0
+        elif args.lessons_cmd == "policies-export":
+            st = export_policies(memory, args.store, categories=args.category,
+                                 message=args.message, push=not args.no_push)
+        elif args.lessons_cmd == "policies-import":
+            counts = import_policies(args.store, memory,
+                                     categories=args.category)
+            if not counts:
+                print("[odr] nothing imported (empty/filtered store)")
+                return 0
+            for cat, n in sorted(counts.items()):
+                print(f"[odr] {cat}: +{n} policy program(s) registered as "
+                      f"CANDIDATE->VALIDATED in the ALM (adoption stays local)")
+            return 0
         else:  # status
             st = store_status(args.store)
     except LessonShareError as exc:
@@ -294,11 +321,57 @@ def cmd_lessons(args: argparse.Namespace) -> int:
     else:
         print(f"[odr] store: {st.location} "
               f"({'git' if st.git else 'plain dir'}, ok={st.ok})")
+        label = {"export": "lesson(s)", "worlds-export": "node(s)",
+                 "policies-export": "program(s)"}.get(args.lessons_cmd, "entry")
         for cat, n in sorted(st.categories.items()):
-            print(f"  {cat}: {n} lesson(s)")
+            if ":" in cat:  # status mixes sections; derive the label per key
+                label = {"world": "node(s)", "policy": "program(s)"}[
+                    cat.split(":", 1)[0]]
+                print(f"  {cat}: {n} {label}")
+            else:
+                print(f"  {cat}: {n} {label}")
         for e in st.errors:
             print(f"  ! {e}")
     return 0 if st.ok else 1
+
+
+def cmd_holdout(args: argparse.Namespace) -> int:
+    """Single-use holdout reservations: a preregistered eval task is consumed
+    once; a later phase cannot silently reuse it (see README 'Holdout hygiene')."""
+    from open_dream_rsi.holdout import HoldoutRegistry, split_reserved
+
+    reg = HoldoutRegistry(args.memory)
+    if args.holdout_cmd == "claim":
+        refused = [t for t in args.ids if not reg.claim(t, args.purpose,
+                                                        phase=args.phase)]
+        ok = [t for t in args.ids if t not in refused]
+        print(f"[odr] reserved {len(ok)} task id(s) for '{args.purpose}'"
+              + (f" (phase {args.phase})" if args.phase else ""))
+        if refused:
+            print(f"[odr] REFUSED (already held for another purpose): "
+                  f"{', '.join(refused)}", file=sys.stderr)
+            return 1
+        return 0
+    if args.holdout_cmd == "release":
+        released = [t for t in args.ids if reg.release(t)]
+        print(f"[odr] released {len(released)} reservation(s): "
+              f"{', '.join(released) or '(none)'}")
+        return 0
+    if args.holdout_cmd == "show":
+        entries = reg.entries()
+        if not entries:
+            print("[odr] no reservations")
+        for tid, meta in sorted(entries.items()):
+            print(f"  {tid}  purpose={meta.get('purpose')}"
+                  + (f" phase={meta['phase']}" if meta.get("phase") else ""))
+        return 0
+    # split: report which tasks of a queue file are holdout-reserved
+    tasks = json.loads(Path(args.tasks).read_text(encoding="utf-8"))
+    allowed, held = split_reserved(tasks, reg)
+    print(f"[odr] {len(allowed)} allowed, {len(held)} holdout-reserved")
+    for t in held:
+        print(f"  held: {t.get('task_id') if isinstance(t, dict) else t}")
+    return 0
 
 
 def cmd_skills(args: argparse.Namespace) -> int:
@@ -532,10 +605,73 @@ def main(argv: list[str] | None = None) -> int:
     limp.add_argument("--category", action="append", default=None)
     limp.set_defaults(func=cmd_lessons)
 
+    wexp = ls_sub.add_parser("worlds-export",
+                             help="add archived discovery trees to a store")
+    wexp.add_argument("--store", required=True,
+                      help="local dir or git URL")
+    wexp.add_argument("--task", action="append", default=None,
+                      help="limit to these task ids (repeatable)")
+    wexp.add_argument("--message", default=None, help="git commit message")
+    wexp.add_argument("--no-push", action="store_true",
+                      help="commit locally but do not push")
+    wexp.set_defaults(func=cmd_lessons)
+
+    wimp = ls_sub.add_parser("worlds-import",
+                             help="import a store's worlds as evidence "
+                                  "(trees/imported/, never live tasks)")
+    wimp.add_argument("--store", required=True, help="local dir or git URL")
+    wimp.add_argument("--task", action="append", default=None,
+                      help="limit to these task ids (repeatable)")
+    wimp.set_defaults(func=cmd_lessons)
+
+    pexp = ls_sub.add_parser("policies-export",
+                             help="add promoted exploration-policy programs "
+                                  "(structural gate applies on export)")
+    pexp.add_argument("--store", required=True, help="local dir or git URL")
+    pexp.add_argument("--category", action="append", default=None,
+                      help="limit to these categories (repeatable)")
+    pexp.add_argument("--message", default=None, help="git commit message")
+    pexp.add_argument("--no-push", action="store_true",
+                      help="commit locally but do not push")
+    pexp.set_defaults(func=cmd_lessons)
+
+    pimp = ls_sub.add_parser("policies-import",
+                             help="register a store's policy programs as "
+                                  "ALM CANDIDATE->VALIDATED (never incumbents)")
+    pimp.add_argument("--store", required=True, help="local dir or git URL")
+    pimp.add_argument("--category", action="append", default=None)
+    pimp.set_defaults(func=cmd_lessons)
+
     lst = ls_sub.add_parser("status", help="verify manifest + checksums")
     lst.add_argument("--store", required=True)
     lst.add_argument("--json", action="store_true")
     lst.set_defaults(func=cmd_lessons)
+
+    hld = sub.add_parser(
+        "holdout",
+        help="single-use holdout reservations — a preregistered eval task "
+             "is consumed once; later phases cannot silently reuse it")
+    hld_sub = hld.add_subparsers(dest="holdout_cmd", required=True)
+
+    hc = hld_sub.add_parser("claim", help="reserve task ids for a purpose")
+    hc.add_argument("--ids", nargs="+", required=True, help="task id(s)")
+    hc.add_argument("--purpose", required=True,
+                    help="e.g. travelplanner_eval, spolki_holdout")
+    hc.add_argument("--phase", default=None,
+                    help="optional phase label recorded with the reservation")
+    hc.set_defaults(func=cmd_holdout)
+
+    hr = hld_sub.add_parser("release", help="forget a reservation (correction path)")
+    hr.add_argument("--ids", nargs="+", required=True)
+    hr.set_defaults(func=cmd_holdout)
+
+    hs = hld_sub.add_parser("show", help="list all reservations")
+    hs.set_defaults(func=cmd_holdout)
+
+    hsplit = hld_sub.add_parser(
+        "split", help="partition a task queue into allowed vs held-back")
+    hsplit.add_argument("--tasks", required=True, help="tasks JSON file")
+    hsplit.set_defaults(func=cmd_holdout)
 
     dash = sub.add_parser("dashboard", help="serve the live web dashboard")
     dash.add_argument("--host", default="0.0.0.0",

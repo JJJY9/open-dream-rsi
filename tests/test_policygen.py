@@ -349,5 +349,61 @@ class DiscoveryEfficiencyTest(unittest.TestCase):
         self.assertEqual(early, late)   # both all-fresh: identical objective
 
 
+class ReviseModeTest(unittest.TestCase):
+    """Revise mode (policy_revive): repair-the-incumbent prompt + replay brief."""
+
+    def setUp(self):
+        self.tree = build_tree()
+
+    def test_revise_prompt_changes_system_and_user(self):
+        seen = {}
+
+        class RecordingClient:
+            def chat(self, messages, model=None, temperature=0.7, max_tokens=None):
+                seen["system"] = messages[0]["content"]
+                seen["user"] = messages[-1]["content"]
+                return "```python\ndef broken(:\n```\n"  # fail fast, one call
+
+        gen = PolicyGenerator(RecordingClient(), max_tokens=None)
+        gen.generate("math", BEST_POLICY, 0.5, self.tree, revise=True)
+        self.assertIn("REVISING", seen["system"])
+        self.assertIn("Your current policy program", seen["user"])
+        self.assertIn("REVISED complete policy", seen["user"])
+        seen.clear()
+        gen.generate("math", BEST_POLICY, 0.5, self.tree, revise=False)
+        self.assertNotIn("REVISING", seen["system"])
+        self.assertIn("exploration policy", seen["system"])  # base contract intact
+
+    def test_generate_with_brief_attaches_replay_trace_on_failure(self):
+        gen = PolicyGenerator(ScriptedPolicyClient("def broken(:\n"), max_tokens=None)
+        result = gen.generate_with_brief("math", BEST_POLICY, 0.5, self.tree)
+        self.assertIsNone(result.source)
+        self.assertIn("greedy replay:", result.error)
+        brief = gen._replay_brief(self.tree)
+        self.assertIn("step 0: expand", brief)
+
+    def test_loop_wiring_policy_revive_flag(self):
+        import tempfile
+        llm = ScriptedLLM()
+        runtime = AutoRSIRuntime(
+            client=llm,
+            memory=DreamMemory(root=f"{tempfile.mkdtemp(prefix='odr-rev-')}/mem"),
+            tasks=[Task(task_id="add1", category="math",
+                        prompt="Implement add(a, b).",
+                        tests=[{"call": "add(2, 3)", "expected": 5}],
+                        max_attempts=3)],
+            api_call_budget=20, dream_iterations=10, rng_seed=42,
+            policy_revive=True,
+        )
+        self.assertTrue(runtime.policy_revive)
+        runtime.run_once()
+        self.assertIsNotNone(runtime.memory.get_policy_code("math"))
+        # default stays OFF
+        rt2 = AutoRSIRuntime(
+            client=ScriptedLLM(), memory=DreamMemory(root=f"{tempfile.mkdtemp(prefix='odr-rev-')}/mem"),
+            tasks=[], api_call_budget=1, enable_policy_code=True)
+        self.assertFalse(rt2.policy_revive)
+
+
 if __name__ == "__main__":
     unittest.main()

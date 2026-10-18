@@ -21,13 +21,17 @@ container) so the OS enforces what the AST gate cannot.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import shlex
 import signal
 import subprocess
 import sys
-from typing import Dict, List, Optional
+import time
+from collections import OrderedDict
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 #: Environment handed to sandboxed children: no API keys, no user env.
 SANDBOX_ENV: Dict[str, str] = {"PATH": "/usr/bin:/bin"}
@@ -216,5 +220,105 @@ def _kill_group(proc: subprocess.Popen) -> None:
 
 __all__ = ["run_isolated", "jail_prefix", "SANDBOX_ENV", "JAIL_ENV_VAR"]
 
-# Interpreter path kept here so callers do not each hard-code it.
+#: Interpreter path kept here so callers do not each hard-code it.
 PYTHON = sys.executable
+
+
+class SandboxCache:
+    """Bounded LRU memo for repeat sandbox runs of IDENTICAL program content.
+
+    Inspired by the independent dream-rsi-sdk's validated-code cache:
+    verifier/gate workloads repeatedly execute the same source (the same
+    candidate re-scored across rounds, the same fixture re-run). The key is
+    computed by the CALLER from the file contents actually handed to the
+    child (:func:`content_key`) plus the effective timeout and the jail
+    prefix — never from temp paths, which differ per call. A hit returns the
+    recorded (returncode, stdout, stderr) verbatim. Only COMPLETED runs are
+    cached: a timeout or spawn error must stay retryable. Opt-in: pass
+    ``cache=`` to :class:`~open_dream_rsi.tools.CodeVerifier` or
+    :class:`~open_dream_rsi.core.policygen.PolicySandbox`; the default path
+    stays uncached.
+    """
+
+    def __init__(self, max_entries: int = 256, ttl_seconds: float = 3600.0):
+        self.max_entries = max(1, int(max_entries))
+        self.ttl_seconds = max(0.0, float(ttl_seconds))
+        self._entries: "OrderedDict[str, Tuple[float, subprocess.CompletedProcess]]" = OrderedDict()
+        self.hits = 0
+        self.misses = 0
+
+    def lookup(self, key: str) -> Optional[subprocess.CompletedProcess]:
+        hit = self._entries.get(key)
+        if hit is None:
+            self.misses += 1
+            return None
+        ts, proc = hit
+        if self.ttl_seconds and time.time() - ts > self.ttl_seconds:
+            del self._entries[key]
+            self.misses += 1
+            return None
+        self._entries.move_to_end(key)
+        self.hits += 1
+        return subprocess.CompletedProcess(proc.args, proc.returncode,
+                                           proc.stdout, proc.stderr)
+
+    def store(self, key: str, proc: subprocess.CompletedProcess) -> None:
+        self._entries[key] = (time.time(), proc)
+        self._entries.move_to_end(key)
+        while len(self._entries) > self.max_entries:
+            self._entries.popitem(last=False)
+
+
+def content_key(files: Dict[str, Any], *, timeout: float) -> str:
+    """Content-addressed identity of one sandbox run.
+
+    ``files`` maps a stable name (e.g. ``"candidate"``) to the exact content
+    written to the child (any JSON-able value is canonicalised with sorted
+    keys; non-serializable values fall back to ``repr``). The effective
+    timeout and the jail prefix join the hash. Temp paths, cwd and env are
+    deliberately excluded — two runs of the same program content under the
+    same limits are the same run.
+    """
+    h = hashlib.sha256()
+    for name in sorted(files):
+        h.update(name.encode("utf-8"))
+        h.update(b"\x00")
+        try:
+            rendered = json.dumps(files[name], sort_keys=True,
+                                  ensure_ascii=False)
+        except (TypeError, ValueError):
+            rendered = repr(files[name])
+        h.update(rendered.encode("utf-8"))
+        h.update(b"\x01")
+    h.update(repr(float(timeout)).encode("utf-8"))
+    h.update(b"\x00")
+    h.update("\x00".join(jail_prefix()).encode("utf-8"))
+    return h.hexdigest()
+
+
+def cached_run_isolated(run: Callable[..., subprocess.CompletedProcess],
+                        argv: List[str], *, key: str, timeout: float,
+                        cwd: Optional[str] = None,
+                        env: Optional[Dict[str, str]] = None,
+                        cache: Optional[SandboxCache] = None
+                        ) -> subprocess.CompletedProcess:
+    """``run_isolated`` with an optional content-addressed result cache.
+
+    ``key`` comes from :func:`content_key` over the file contents the caller
+    wrote. Timeouts and spawn errors are NEVER cached.
+    """
+    if cache is None:
+        return run(argv, timeout=timeout, cwd=cwd, env=env)
+    hit = cache.lookup(key)
+    if hit is not None:
+        return hit
+    try:
+        proc = run(argv, timeout=timeout, cwd=cwd, env=env)
+    except subprocess.TimeoutExpired:
+        raise  # never cached
+    cache.store(key, proc)
+    return proc
+
+
+__all__ = ["run_isolated", "jail_prefix", "SANDBOX_ENV", "JAIL_ENV_VAR",
+           "SandboxCache", "content_key", "cached_run_isolated"]
