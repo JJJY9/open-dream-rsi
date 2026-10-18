@@ -274,9 +274,18 @@ reject it:
   ($\sim$15$\times$ faster than per-step spawning). The objective is
   \begin{equation}
     \text{score}(\pi) \;=\; \frac{1}{T}\sum_{t=1}^{T} r_t
-    \;+\; \beta_2 \cdot \frac{|\{\text{distinct picks}\}|}{T},
-    \qquad \beta_2 = 0.2,
+    \;+\; \beta_2 \cdot \frac{|\{\text{distinct picks}\}|}{T}
+    \;-\; \beta_3 \cdot \bigl(1 - e\bigr),
   \end{equation}
+  with $\beta_2 = 0.2$, $\beta_3 = 0.1$, and the discovery-efficiency
+  factor $e = |\{(\text{node}, r_t)\ \text{first harvests}\}| / T$: a
+  step that re-pays a value already recorded from the same node replays an
+  exhausted ladder --- a call producing no new discovery. The term
+  operationalizes Dream-RSI~v2's rounds-per-call efficiency over a recorded
+  tree \cite{dreamrsi} (an earlier latency formulation --- rewarding early
+  payoff --- mis-ranked structural explorers below lucky ladder-order
+  harvests on decoy fixtures and was rejected in measurement). The
+  objective is
   applied \emph{identically} to the candidate and to an in-process greedy
   baseline. Mean-only scoring mis-ranks explorers below greedy on trap trees;
   the diversity term is what lets a genuinely structural explorer win the
@@ -284,7 +293,9 @@ reject it:
   \item \hdr{Promotion gate.} A candidate replaces the incumbent only with
   evidence: $\geq$80\% valid sandbox decisions (\texttt{MIN\_VALIDITY}=0.8)
   over a horizon of $\geq$8 recorded steps (\texttt{MIN\_HORIZON}), and a
-  rollout score beating the greedy baseline under the shared objective.
+  rollout score strictly beating the greedy baseline under the shared
+  objective (a tie is not evidence --- the same strictness the lesson gate
+  applies).
   When an incumbent exists it is \emph{re-scored on the current tree} rather
   than trusted at its stored score: the replay world grows between cycles,
   and an old threshold would admit candidates that are genuinely worse than
@@ -292,7 +303,14 @@ reject it:
   \item \hdr{Call economy.} A category that already solves with its promoted
   policy is not re-asked; regeneration requires 4 new replay steps of
   evidence (\texttt{POLICY\_REGROW\_STEPS}), and all generation calls count
-  against the same budget guard.
+  against the same budget guard. A third, opt-in mechanism stops
+  \emph{spending} on regeneration altogether: an anytime-valid betting
+  martingale per category over the binary ``did this cycle's regeneration
+  promote'' outcome (null rate calibrated from the first rounds, floored at
+  0.5; $\lambda{=}0.5$, $\alpha{=}0.05$), after whose alarm the last
+  promoted policy stays active and further policy-generation calls are
+  skipped \cite{evostop}---the recorded-tree mapping of stopping rules for
+  self-evolving loops. Benchmarks pin it off.
 \end{enumerate}
 
 The promoted program then \emph{steers online expansion}: which frontier node
@@ -617,11 +635,11 @@ defaults:
 arm & solves & API calls & calls / task$\cdot$cycle \\
 \midrule
 cold baseline (fresh memory each cycle) & 50 & 150 & 3.00 \\
-dream loop (policies + recipes + dreaming) & 50 & 69 & 1.38 \\
+dream loop (policies + recipes + dreaming) & 50 & 71 & 1.42 \\
 \bottomrule
 \end{tabular}
-\caption{\texttt{bench}: 54.0\% API-call saving at equal solve quality
-(3{,}000 dreaming iterations run offline; wall-clock 2.1\,s). The curator is
+\caption{\texttt{bench}: 52.7\% API-call saving at equal solve quality
+(3{,}000 dreaming iterations run offline; wall-clock 3.2\,s). The curator is
 disabled in this benchmark to keep the cost measurement pure.}
 \end{table}
 
@@ -644,7 +662,7 @@ arm & solves & rate & calls & calls/solve & gen.\ calls \\
 \midrule
 greedy & 0/120 & 0\% & 480 & $\infty$ & 0 \\
 $\varepsilon$-greedy ($\varepsilon{=}0.3$) & 29/120 & 24\% & 405 & 13.97 & 0 \\
-replay-gated policies & \textbf{92/120} & \textbf{77\%} & \textbf{252} & \textbf{2.74} & 27 policy \\
+replay-gated policies & \textbf{93/120} & \textbf{78\%} & \textbf{249} & \textbf{2.68} & 26 policy \\
 curated knowledge base & 87/120 & 72\% & 330 & 3.79 & 27 curator \\
 thought-guided branching & \textbf{120/120} & \textbf{100\%} & \textbf{164} & \textbf{1.37} & 0 \\
 sentinel-guided policies & 102/120 & 85\% & 219 & 2.15 & 15 policy \\
@@ -678,7 +696,7 @@ sentinel-guided policies converge from recorded failure facts alone.}
 \end{figure}
 
 \hdr{Seed robustness.} The shipped seeds (7,\,11,\,23) are not cherry-picked:
-over five independent seed sets the policy arm lands within 83--92 and the
+over five independent seed sets the policy arm lands within 88--93 and the
 knowledge arm within 87--89 solves of 120 respectively---statistically
 indistinguishable from each other---while $\varepsilon$-greedy stays at
 8--29. The dominance over $\varepsilon$ (roughly 3$\times$ the solves at
@@ -991,6 +1009,9 @@ code does on the machine where these numbers were collected.
 \begin{thebibliography}{99}
 \bibitem{dreamrsi} Zheng et al., \emph{Dream-RSI: Recursive
 Self-Improvement through Evolving Worlds}, arXiv:2609.14858, 2026.
+\bibitem{evostop} \emph{When Is Enough Enough in Self-Evolving LLM
+Systems?} (anytime-valid stopping and change-point output selection for
+self-evolving loops), arXiv:2610.04756, 2026.
 \bibitem{funsearch} B.~Romera-Paredes, M.~Barekatain, A.~Novikov, M.~Balog,
 M.~P.~Kumar, E.~Dupont, F.~J.~R.~Ruiz, J.~S.~Ellenberg, P.~Wang, O.~Fawzi,
 P.~Kohli, A.~Fawzi, \emph{Mathematical discoveries from program search with

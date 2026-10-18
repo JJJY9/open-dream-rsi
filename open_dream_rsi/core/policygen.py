@@ -68,6 +68,13 @@ from open_dream_rsi.sandbox import run_isolated
 #: score ones — the counterfactual counterpart of UCB's visit-count term).
 #: Applied identically to candidates and the greedy baseline.
 DIVERSITY_BETA = 0.2
+
+#: Weight of the discovery-efficiency term (Dream-RSI v2 scores policies on
+#: completed rounds per call; over a recorded tree the analog is the share of
+#: rollout steps that harvest a NEW (node, reward) pair — a step re-paying a
+#: value already recorded from that node is a wasted call on an exhausted
+#: branch). Applied identically to candidate and baseline.
+EFFICIENCY_BETA = 0.1
 #: Fraction of rollout steps that must return a frontier-valid choice for a
 #: candidate to be promotable at all.
 MIN_VALIDITY = 0.8
@@ -99,7 +106,10 @@ POLICY_CONTRACT = (
     "that will fail hidden tests forever — re-expanding it burns the budget, "
     "while branches with different (or no) failures hide the real prize. "
     "Good policies balance exploiting promising branches against trying "
-    "under-expanded ones. "
+    "under-expanded ones. Policies are also scored on DISCOVERY "
+    "EFFICIENCY: a step that re-pays a value already recorded from the "
+    "same node (an exhausted branch) is a wasted call — do not camp on "
+    "branches whose recorded children you have already harvested. "
     "Rules: pure stdlib, no imports, no file/network/process access, no "
     "leading-underscore attributes, must terminate, must handle an empty "
     "frontier (return None)."
@@ -512,10 +522,32 @@ def _simulate_step_rewards(world: Dict[str, Any], pick_fn: Any) -> Tuple[List[fl
 
 
 def _rollout_objective(rewards: List[float], picks: List[str]) -> float:
-    """Mean reward + branch-diversity bonus (beta_2), comparable across arms."""
+    """Mean reward + diversity bonus - discovery-inefficiency penalty.
+
+    The efficiency term operationalizes Dream-RSI v2's rounds-per-call
+    efficiency over a recorded tree: a rollout step that pays a (node,
+    reward) pair ALREADY harvested from that node re-plays an exhausted
+    ladder — a call producing no new discovery. e = fresh steps / steps;
+    camping on one branch pays its recorded children once and then burns
+    the horizon re-harvesting the last one. (Note: this is NOT payoff
+    latency — an earlier measurement showed latency mis-ranks structural
+    explorers below lucky ladder-order harvests on decoy fixtures.)
+    """
     total = len(rewards) or 1
+    mean = sum(rewards) / total
     distinct = len({p for p in picks if p != "!invalid"})
-    return sum(rewards) / total + DIVERSITY_BETA * distinct / total
+    obj = mean + DIVERSITY_BETA * distinct / total
+    seen: set = set()
+    fresh = 0
+    for pick, r in zip(picks, rewards):
+        if pick == "!invalid":
+            continue  # already punished by reward 0 + the validity floor
+        key = (pick, round(r, 9))
+        if key not in seen:
+            seen.add(key)
+            fresh += 1
+    obj -= EFFICIENCY_BETA * (1.0 - fresh / total)
+    return obj
 
 
 def rollout_score(
@@ -677,10 +709,14 @@ class PolicyGenerator:
                 continue
             if source == incumbent_source:
                 return GenerationResult(None, score, "identical to incumbent")
-            if score < incumbent_score - 1e-9:
+            if score <= incumbent_score + 1e-9:
+                # STRICT improvement only: a tie is not evidence (the same
+                # philosophy as the lesson gate's confirmed-strict-win rule).
+                # A tying challenger must not displace a trusted incumbent.
                 return GenerationResult(
                     None, score,
-                    f"replay score {score:.4f} < incumbent {incumbent_score:.4f}")
+                    f"replay score {score:.4f} did not strictly beat "
+                    f"incumbent {incumbent_score:.4f}")
             return GenerationResult(source, score, "")
         return GenerationResult(None, float("-inf"), feedback or "generation failed")
 

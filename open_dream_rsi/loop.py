@@ -38,6 +38,7 @@ from open_dream_rsi.core.curator import (
     select_lessons,
 )
 from open_dream_rsi.core.dreamer import DreamEngine
+from open_dream_rsi.evolution import EvolutionStopper
 from open_dream_rsi.core.policygen import (
     PolicyGenerator,
     PolicySandbox,
@@ -208,6 +209,7 @@ class AutoRSIRuntime:
         enable_judge: bool = True,
         fair_queue: bool = True,
         sentinel_engine: Any = None,
+        enable_evolution_stop: bool = False,
         alm: Optional["ArtifactLifecycleManager"] = None,
     ):
         self.client = client
@@ -264,6 +266,13 @@ class AutoRSIRuntime:
         # episode's stop cause is recorded (node.termination_reason).
         # Default None = trees byte-identical to pre-observation runs.
         self.sentinel = sentinel_engine
+        # Anytime-valid evolution stopping (opt-in; arXiv:2610.04756): a
+        # betting martingale per category over "did regeneration promote
+        # this cycle". After an alarm the loop keeps the last promoted
+        # policy and stops spending calls on regeneration attempts.
+        self.enable_evolution_stop = enable_evolution_stop
+        self._evolution = EvolutionStopper()
+        self._cycle_policy_promoted: set = set()
         # Artifact Lifecycle Manager (issue #3): the loop OWNS learning —
         # what to create and whether a promotion is earned — the ALM OWNS
         # lifecycle bookkeeping (validation, activation events, staleness,
@@ -437,10 +446,12 @@ class AutoRSIRuntime:
             attempts = self.memory.get_all_task_attempts()
             tasks = sorted(tasks, key=lambda t: attempts.get(t.task_id, 0))
         self._emit("cycle_start", tasks=[t.task_id for t in tasks])
+        attempted_categories: set = set()
         for task in tasks:
             if self.api_calls_used >= self.api_call_budget:
                 report.stopped_reason = "api_budget_exhausted"
                 break
+            attempted_categories.add(task.category)
             solved, improved = self._work_on_task(task, report)
             self.memory.record_task_attempt(task.task_id)
             report.tasks_attempted += 1
@@ -449,6 +460,18 @@ class AutoRSIRuntime:
             if improved:
                 report.improvements.append(improved)
 
+        if self.enable_evolution_stop:
+            for cat in sorted(attempted_categories):
+                prev = self._evolution.is_frozen(cat)
+                d = self._evolution.observe(
+                    cat, promoted=cat in self._cycle_policy_promoted)
+                if d["frozen"] and not prev:
+                    self.memory.log_event(
+                        "evolution_alarm", category=cat, rounds=d["rounds"],
+                        wealth=round(d["wealth"], 4), p0=d["p0"])
+                    self._emit("evolution_alarm", category=cat,
+                               rounds=d["rounds"])
+            self._cycle_policy_promoted.clear()
         self.memory.log_event("cycle", **report.to_dict())
         self._emit("cycle_done", **report.to_dict())
         self._alm_maintenance()
@@ -915,6 +938,8 @@ class AutoRSIRuntime:
         """Section-3 step: LLM rewrites the exploration policy, gate promotes on evidence."""
         if not self.enable_policy_code or self.api_calls_used >= self.api_call_budget:
             return
+        if self.enable_evolution_stop and self._evolution.is_frozen(task.category):
+            return
         entry = self.memory.get_policy_code(task.category)
         if solved and entry:
             # the category already solves itself — exploration calls are for
@@ -963,6 +988,7 @@ class AutoRSIRuntime:
             return
         if self.memory.save_policy_code(task.category, result.source, result.score,
                                         steps=steps):
+            self._cycle_policy_promoted.add(task.category)
             report.improvements.append(
                 f"{task.category}: new exploration policy (replay {result.score:.3f})")
             self.memory.log_event("policy_promoted", task_id=task.task_id,

@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-350%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-357%20passing-brightgreen)](tests/)
 
 ## What is this?
 
@@ -70,7 +70,7 @@ first time, records the failure into a Discovery Tree, "dreams" over the
 recorded history between cycles, and reuses the verified fix afterwards —
 watch the cycle lines: the first cycle pays the failure tax (6 API calls),
 every later cycle solves from memory in 3. The benchmark prints the
-cold-baseline comparison (54% fewer calls at equal solve quality, re-run on
+cold-baseline comparison (53% fewer calls at equal solve quality, re-run on
 every commit in CI).
 
 **Then point it at a real model** — any OpenAI-compatible endpoint, keys from
@@ -478,8 +478,11 @@ agent = DreamAgent(dreamer=dreamer, client=client)
 | Audit log | `events.jsonl` | append-only record of every decision |
 
 Switches worth knowing: `--no-policy-code`, `--no-knowledge`, `--no-thoughts`,
-`--no-judge` ablate the four optional machinery layers; `--budget N` caps API
-calls per cycle (dreaming stays free).
+`--no-judge` ablate the four optional machinery layers; `--evolution-stop`
+(opt-in) freezes policy regeneration after an anytime-valid betting-martingale
+alarm — no promotion evidence left in a category stops the spending, the last
+promoted policy stays active; `--budget N` caps API calls per cycle (dreaming
+stays free).
 
 ---
 
@@ -578,9 +581,9 @@ re-run from a fresh clone in seconds.
 | arm | solves | API calls | calls / task·cycle | dream its |
 |---|---|---|---|---|
 | cold_baseline (fresh memory each cycle) | 50 | 150 | 3.0 | 0 |
-| dream_rsi_loop (policies + recipes + dreaming) | 50 | 69 | 1.38 | 3000 |
+| dream_rsi_loop (policies + recipes + dreaming) | 50 | 71 | 1.42 | 3000 |
 
-**54% fewer API calls at equal solve quality** (re-measured on this commit:
+**53% fewer API calls at equal solve quality** (re-measured on this commit:
 identical to the published table).
 
 ```bash
@@ -603,7 +606,7 @@ python -m open_dream_rsi bench-policy --cycles 8 --format md
 |---|---|---|---|---|---|---|
 | greedy | 0/120 | 0% | 480 | ∞ | 0 | 0 |
 | epsilon_greedy | 29/120 | 24% | 405 | 13.97 | 0 | 0 |
-| **evolved_policy** | **92/120** | **77%** | **252** | **2.74** | 27 | 0 |
+| **evolved_policy** | **93/120** | **78%** | **249** | **2.68** | 26 | 0 |
 | **knowledge_curator** | **87/120** | **72%** | 330 | 3.79 | 0 | 27 |
 | **thought_guided** | **120/120** | **100%** | **164** | **1.37** | 0 | 0 |
 | **sentinel_guided** | **102/120** | **85%** | 219 | 2.15 | 15 | 0 |
@@ -613,7 +616,7 @@ python -m open_dream_rsi bench-policy --cycles 8 --format md
   100% solve rate by cycle 5 while spending *fewer total calls* than ε
   wasted on luck.
 - **knowledge_curator** — ε-greedy with zero policy calls: every escape
-  above the ε baseline came from remembered knowledge (73%, at parity with
+  above the ε baseline came from remembered knowledge (72%, at parity with
   the gated policies at ~80% of ε's calls).
 - **thought_guided** (library default) — each attempt records its one-line
   `PLAN:`; expansion leaves a branch as soon as its idea repeats itself.
@@ -974,6 +977,7 @@ dreamed-policy gauges per category and the learned recipe library.
 | `proxy` | loopback OpenAI-compatible proxy borrowing goose's upstream |
 | `dashboard` | zero-dependency live web UI |
 | `gate_replay` | offline validation of the lesson promotion rule |
+| `evolution` | anytime-valid stopper for policy evolution (betting martingale over promotion outcomes; freezes regeneration, keeps the last promoted policy) |
 | `sentinel` | host-agnostic error-class engine + `SentinelObservation` world contract |
 | `utils.goose` | goose config resolver (CLI + desktop dialects, keychain) |
 | `plugins/*` | Hermes / Claude Code / goose / DeepSeek Harness / Cursor adapters |
@@ -985,7 +989,7 @@ dreamed-policy gauges per category and the learned recipe library.
 python -m unittest discover -s tests
 ```
 
-350 tests, stdlib-only: benchmark behavioural contracts
+357 tests, stdlib-only: benchmark behavioural contracts
 (greedy must solve nothing; the gated arm must dominate ε; the rollout must
 be prefix-only), sandbox escape regressions, gate semantics, MCP protocol,
 goose config dialects, sentinel channel semantics (nudge fires once per

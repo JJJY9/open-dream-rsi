@@ -332,5 +332,22 @@ class LoopPolicyIntegrationTest(unittest.TestCase):
         self.assertIsNone(self.memory.get_policy_code("math"))
 
 
+class DiscoveryEfficiencyTest(unittest.TestCase):
+    """The efficiency term: re-harvesting an exhausted branch is penalized."""
+
+    def test_camping_is_penalized_fresh_discovery_is_not(self):
+        from open_dream_rsi.core.policygen import _rollout_objective
+        # same rewards, different pick pattern: all-fresh vs one camper
+        fresh = _rollout_objective([0.5, 0.5, 0.5, 0.5], ["a", "b", "c", "d"])
+        camper = _rollout_objective([0.5, 0.5, 0.5, 0.5], ["a", "a", "a", "a"])
+        self.assertAlmostEqual(fresh, 0.5 + 0.2)          # no penalty
+        self.assertAlmostEqual(camper, 0.5 + 0.2 * 0.25 - 0.1 * 0.75)
+        self.assertGreater(fresh, camper)
+        # latency is NOT rewarded: reaching the max earlier changes nothing
+        early = _rollout_objective([1.0, 0.0, 0.0, 0.0], ["a", "b", "c", "d"])
+        late = _rollout_objective([0.0, 0.0, 0.0, 1.0], ["a", "b", "c", "d"])
+        self.assertEqual(early, late)   # both all-fresh: identical objective
+
+
 if __name__ == "__main__":
     unittest.main()

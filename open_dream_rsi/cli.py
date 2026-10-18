@@ -60,6 +60,7 @@ def cmd_loop(args: argparse.Namespace) -> int:
         interval_seconds=args.interval,
         max_tokens=args.max_tokens,
         enable_policy_code=not args.no_policy_code,
+        enable_evolution_stop=bool(getattr(args, "evolution_stop", False)),
         enable_knowledge=not args.no_knowledge,
         enable_thoughts=not args.no_thoughts,
         enable_judge=not args.no_judge,
@@ -371,6 +372,10 @@ def main(argv: list[str] | None = None) -> int:
     loop.add_argument("--dream-iters", type=int, default=60)
     loop.add_argument("--no-policy-code", action="store_true",
                       help="disable LLM-written exploration policies (section-3 step)")
+    loop.add_argument("--evolution-stop", action="store_true",
+                      help="anytime-valid stopping for policy evolution "
+                           "(freeze regeneration after a betting-martingale "
+                           "alarm; the last promoted policy stays active)")
     loop.add_argument("--no-knowledge", action="store_true",
                       help="disable the knowledge curator (lessons.json KB, section-4 step)")
     loop.add_argument("--no-thoughts", action="store_true",
