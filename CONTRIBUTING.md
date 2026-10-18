@@ -68,3 +68,14 @@ welcome.
    `patrykorwat`, repository `open-dream-rsi`, workflow `publish.yml`,
    environment left blank). Verify after: `pip index versions
    open-dream-rsi` or the project page.
+5. **npm bundle** (`plugins/deepseek_harness/`, package `dsh-open-dream-rsi`):
+   the version lives in the bundle's `package.json` (checked by
+   `scripts/check_versions.py`). Publishing is automated too:
+   `.github/workflows/publish-npm.yml` runs on the same `v*` tags — npm
+   **trusted publishing** (OIDC), no `NPM_TOKEN` stored. One-time setup on
+   npmjs.com (package → Settings → Trusted Publisher → GitHub Actions):
+   owner `patrykorwat`, repository `open-dream-rsi`, workflow
+   `publish-npm.yml`, and allow **direct publish** — registrations made
+   after Sep 2026 default to stage-publish only, which rejects plain
+   `npm publish`. To release a version whose tag predates the workflow,
+   run it from the Actions tab (**Run workflow**) with the tag name.

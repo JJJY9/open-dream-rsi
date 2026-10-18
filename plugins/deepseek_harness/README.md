@@ -58,6 +58,27 @@ dsh plugin --profile <name> add "github:patrykorwat/open-dream-rsi#<sha>&path:pl
 (The pin must point at a commit that already contains this directory —
 pnpm fetches sources, not releases.)
 
+## Updating
+
+The bundle is self-contained (the Python server is vendored, no pip, no
+build step), so updating is a re-install of the same package id:
+
+```bash
+dsh plugin --profile <name> add dsh-open-dream-rsi
+```
+
+Installed from git instead? Pin a commit that already contains the bundle
+files — an older sha registers a synthetic `0.0.0` package and dsh dies in
+`resolveBundleDir`:
+
+```bash
+dsh plugin --profile <name> add github:patrykorwat/open-dream-rsi#<sha>&path:plugins/deepseek_harness
+```
+
+Verify the installed version afterwards with your profile's plugin list
+(see `dsh plugin --help`). Re-installs never touch your memory:
+`tasks.json` / `.dream_rsi` live beside the directory dsh launches from.
+
 ## Install (stdio, `--patch` overlay)
 
 1. Make the server importable (not on PyPI — install from the repo):
