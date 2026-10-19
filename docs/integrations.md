@@ -287,24 +287,56 @@ The six tools are registered prefixed per client (e.g. Hermes
 
 ### Hermes Agent
 
-Add under `mcp_servers` in `~/.hermes/config.yaml` (or via the dashboard's
-MCP catalog):
+Easiest: install the bundled plugin. Hermes discovers plugin manifests in a
+repo root or one directory deep — this repo ships `odr-trigger/plugin.yaml`
+(the event-driven dream cycle: every session end fires `dream_once()` —
+evidence ingest, lesson distillation, promotion gate, ALM maintenance —
+event-driven, no cron, no schedule; overlapping triggers collapse on a lock).
+
+Desktop app: **Settings → Plugins → Install from Git**, paste
+`https://github.com/patrykorwat/open-dream-rsi`, review, install, enable
+`odr-trigger`.
+
+![Hermes desktop — Install from Git](images/hermes-install-dialog.png)
+
+CLI (same result, works headless):
+
+```bash
+pip install open-dream-rsi        # the plugin imports the library in-process
+hermes plugins install "https://github.com/patrykorwat/open-dream-rsi#odr-trigger"
+hermes plugins enable odr-trigger
+```
+
+The `#odr-trigger` fragment points discovery at the plugin directory (the
+repo also carries a Cursor manifest, so a whole-repo scan can be ambiguous).
+Point the dreamer's brain at your model with env — the zero-config chain
+applies (`OPENAI_BASE_URL` + `OPENAI_API_KEY`; the served model is
+auto-detected via `/v1/models`). For a server install, see
+[Hermes in Docker](#hermes-in-docker-servercontainer-setup).
+
+#### MCP tools beside the trigger plugin
+
+The plugin automates the dream cycle. To also have the loop's MCP tools
+(`odr_recipes`, `odr_add_task`, …) inside Hermes sessions, add the server
+under `mcp_servers` in `~/.hermes/config.yaml` (or via the dashboard's MCP
+catalog):
 
 ```yaml
 mcp_servers:
   open-dream-rsi:
     command: "python3"
     args: ["-m", "open_dream_rsi", "mcp",
-           "--tasks", "/ABSOLUTE/PATH/open-dream-rsi/tasks.json",
-           "--memory", "/ABSOLUTE/PATH/open-dream-rsi/.dream_rsi"]
+           "--tasks", "/ABSOLUTE/PATH/tasks.json",
+           "--memory", "/ABSOLUTE/PATH/.dream_rsi"]
     timeout: 300
 ```
 
-Restart Hermes. Tools appear as `mcp_open_dream_rsi_*` in every platform
-toolset. Hermes also supports MCP **sampling** — if you want the dreamer to
-use Hermes' own model through the protocol instead of config-file
-resolution, that is the one host where it works; today ODR does not request
-sampling (it resolves the endpoint itself).
+(0.3.9+ pip installs put an `odr` console script on PATH — `command: "odr"`,
+`args: ["mcp", …]` is equivalent when the gateway inherits your PATH.)
+Restart Hermes; tools appear as `mcp_open_dream_rsi_*` in every platform
+toolset. Hermes also supports MCP **sampling** — the one host where the
+dreamer could use the host's own model through the protocol; today ODR
+resolves its endpoint itself (zero-config chain).
 
 ### Hermes in Docker (server/container setup)
 

@@ -7,6 +7,13 @@ truth.
 ## [0.3.9] — 2026-10-18
 
 ### Added
+- **Hermes one-line plugin install**: the `odr-trigger` plugin now lives at
+  the repo's top level (`odr-trigger/`), where Hermes plugin discovery finds
+  it — `hermes plugins install
+  "https://github.com/patrykorwat/open-dream-rsi#odr-trigger"` or the
+  desktop **Install from Git** dialog; the old manual `cp -r` path is gone.
+- **Session-import documentation moved to [docs/sessions.md](docs/sessions.md)**
+  (README carries a command table); README shortened to ~680 lines.
 - **`odr` console script** (`[project.scripts]`): `odr status`, `odr mcp …` —
   one-line MCP config blocks; `uvx --from open-dream-rsi odr …` works with no
   prior install.

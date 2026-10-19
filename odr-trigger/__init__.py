@@ -140,7 +140,9 @@ def _odr_root() -> str:
         return _ROOT
     candidates = [os.environ.get("ODR_ROOT", ""), "/opt/odr"]
     here = Path(__file__).resolve()
-    candidates.append(str(here.parents[2]))  # .../open-dream-rsi/plugins/x/..
+    # sibling checkout: repo root sits one dir up (odr-trigger/) or two
+    # (the legacy plugins/x/ layout) — accept either
+    candidates += [str(p) for p in here.parents[1:3]]
     for c in candidates:
         if c and (Path(c) / "open_dream_rsi").is_dir():
             _ROOT = c
