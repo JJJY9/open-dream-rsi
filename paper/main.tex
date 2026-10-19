@@ -894,12 +894,21 @@ proven at scale by their authors; we ship the same loop pattern as a
 dependency-free, budget-guarded, OpenAI-compatible tool and add the curator,
 the Sentinel world seam, and deterministic machinery self-checks.
 
-\hdr{Memory and self-generated policies in agents.} Reflexion
-\cite{reflexion} shows that verbal self-feedback stored in an episodic memory
-materially improves subsequent attempts---the same principle our knowledge
-curator operationalises persistently across runs; Voyager \cite{voyager}
-builds a persistent skill library of verified programs, the closest ancestor
-of our replay-gated policy promotion.
+\hdr{Memory and self-generated policies in agents.} The line is broad: a
+recent survey \cite{selfevosurvey} maps self-evolving agents by what, when
+and how to evolve. Reflexion \cite{reflexion} shows that verbal self-feedback
+stored in episodic memory materially improves subsequent attempts---the same
+principle our knowledge curator operationalises persistently across runs;
+Self-Refine \cite{selfrefine} is its test-time-only cousin (no persistence);
+ExpeL \cite{expel} distils cross-task insights and in-context exemplars;
+Agent Workflow Memory \cite{awm} induces reusable workflows from experience;
+ACE \cite{ace} evolves the context itself as an accumulating playbook, the
+closest published analogue of our recipe store; Early Experience
+\cite{earlyexp} uses the agent's own rollouts as reward-free training
+signal---a weights-updating neighbour of dreaming. None of these promote
+candidates through counterfactual replay over an evolving recorded world;
+Voyager \cite{voyager}, with its verified skill library, remains the closest
+ancestor of that promotion gate.
 
 \hdr{Independent implementations.} Since the paper's release several
 independent implementations have appeared: a model-agnostic adapter SDK with
@@ -1050,6 +1059,24 @@ arXiv:2410.07095, 2024.
 \bibitem{hermesdrsi} lesterppo, \emph{hermes-dream-rsi},
 \url{https://github.com/lesterppo/hermes-dream-rsi}; Harkit2004,
 \dots \emph{dream-rsi-skill}; mailbobg, \emph{Pi-RSI}.
+\bibitem{selfevosurvey} H.~Gao, J.~Geng, W.~Hua, M.~Hu, et~al.,
+\emph{A survey of self-evolving agents: What, when, how, and where to evolve
+on the path to artificial super intelligence}, arXiv:2507.21046, 2025;
+to appear in TMLR (01/2026).
+\bibitem{selfrefine} A.~Madaan, N.~Tandon, P.~Gupta, S.~Hallinan, L.~Gao,
+S.~Wiegreffe, U.~Alon, N.~Dziri, S.~Prabhumoye, Y.~Yang, S.~Gupta,
+B.~P.~Majumder, K.~Hermann, S.~Welleck, A.~Yazdanbakhsh, P.~Clark,
+\emph{Self-Refine: Iterative refinement with self-feedback},
+arXiv:2303.17651, 2023.
+\bibitem{expel} A.~Zhao, D.~Huang, Q.~Xu, M.~Lin, et~al.,
+\emph{ExpeL: LLM agents are experiential learners}, arXiv:2308.10144, 2023.
+\bibitem{awm} Z.~Z.~Wang, J.~Mao, D.~Fried, G.~Neubig,
+\emph{Agent workflow memory}, arXiv:2409.07429, 2024.
+\bibitem{ace} Q.~Zhang, C.~Hu, S.~Upasani, B.~Ma, et~al.,
+\emph{Agentic context engineering: Evolving contexts for self-improving
+language models}, arXiv:2510.04618, 2025.
+\bibitem{earlyexp} K.~Zhang, X.~Chen, B.~Liu, T.~Xue, et~al.,
+\emph{Agent learning via early experience}, arXiv:2510.08558, 2025.
 \end{thebibliography}
 
 \end{document}

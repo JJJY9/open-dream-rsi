@@ -776,6 +776,22 @@ on loopback unless the LAN is trusted.
   ([arXiv:2609.14858](https://arxiv.org/abs/2609.14858)); official repo
   [zhengkid/Dream-RSI](https://github.com/zhengkid/Dream-RSI), explainer
   [dream-rsi.com](https://dream-rsi.com/).
+- **The broader published line this sits in:** Self-Refine
+  ([arXiv:2303.17651](https://arxiv.org/abs/2303.17651)) iterates on outputs
+  at test time; Reflexion stores verbal self-feedback across attempts; ExpeL
+  ([arXiv:2308.10144](https://arxiv.org/abs/2308.10144)) distils cross-task
+  insights and exemplars; Agent Workflow Memory
+  ([arXiv:2409.07429](https://arxiv.org/abs/2409.07429)) induces reusable
+  workflows; ACE ([arXiv:2510.04618](https://arxiv.org/abs/2510.04618))
+  evolves the agent's context as an accumulating playbook — the closest
+  published analogue of our recipe store; Early Experience
+  ([arXiv:2510.08558](https://arxiv.org/abs/2510.08558)) uses the agent's own
+  rollouts as reward-free training signal (a weights-updating neighbour of
+  dreaming); the field is mapped by the self-evolving-agents survey
+  ([arXiv:2507.21046](https://arxiv.org/abs/2507.21046), TMLR 01/2026). None
+  of these promote candidates through counterfactual replay over an evolving
+  recorded world — that promotion gate is this library's structural
+  difference.
 - **Peer implementations** (this repo is an independent open one, not the
   first): [TheAstrayDev/dream-rsi-sdk](https://github.com/TheAstrayDev/dream-rsi-sdk)
   (adapter SDK, strict replay; LLM-written policies on their roadmap),
