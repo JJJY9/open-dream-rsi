@@ -92,5 +92,5 @@ validated by replaying it over recorded pairs, not by burning new runs.
 
 `bench`, `bench-policy` and `gate-replay` are **machinery self-checks**. The
 only performance claim in this project is
-[goose × TravelPlanner](../README.md#benchmark-goose--travelplanner-public-externally-scored),
+[goose × TravelPlanner](benchmarks.md),
 scored by the benchmark's own evaluators.
