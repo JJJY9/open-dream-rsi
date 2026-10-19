@@ -1,10 +1,5 @@
 # Open Dream-RSI
 
-> **📄 Preprint:** *Open Dream-RSI: An Open-Source Library for Recursive
-> Self-Improvement Around a Frozen LLM, with Replay-Gated Learned Policies and
-> a Curated Knowledge Base* — P. Orwat, 2026.
-> [**PDF**](paper/main.pdf) · [**LaTeX source**](paper/main.tex)
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml)
@@ -55,6 +50,11 @@ carry no model-quality claim.
 **How it compares** — stored state, how entries earn trust, runtime cost,
 against Mem0, Letta, Reflexion-style reflection, DSPy optimizers and skill
 libraries: [docs/comparison.md](docs/comparison.md).
+
+> **📄 Preprint:** *Open Dream-RSI: An Open-Source Library for Recursive
+> Self-Improvement Around a Frozen LLM, with Replay-Gated Learned Policies and
+> a Curated Knowledge Base* — P. Orwat, 2026.
+> [**PDF**](paper/main.pdf) · [**LaTeX source**](paper/main.tex)
 
 ---
 
