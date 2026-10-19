@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/patrykorwat/open-dream-rsi/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-392%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-397%20passing-brightgreen)](tests/)
 [![PyPI](https://img.shields.io/pypi/v/open-dream-rsi)](https://pypi.org/project/open-dream-rsi/)
 
 ## What is this?
@@ -158,9 +158,12 @@ cd open-dream-rsi
 pip install -e .
 ```
 
-Or straight from PyPI: `pip install open-dream-rsi` — releases are
-tag-driven (push `v*` → build, `twine check`, publish via trusted
-publishing, `.github/workflows/publish.yml`; no stored credentials).
+0.3.9+ also installs an `odr` console script (`odr status`, `odr dream …`),
+so an MCP config block can be one line — `odr mcp --tasks tasks.json
+--memory .dream_rsi` — and `uvx --from open-dream-rsi odr status` works
+with no prior install. Releases are tag-driven (push `v*` → build, `twine
+check`, publish via trusted publishing, `.github/workflows/publish.yml`; no
+stored credentials).
 The name `dreamrsi` on PyPI belongs to an unrelated project; this library
 is the open implementation of the Dream-RSI paper (official repo:
 [zhengkid/Dream-RSI](https://github.com/zhengkid/Dream-RSI)).
@@ -517,7 +520,7 @@ refuses to register them. Inspect the store:
 
 ---
 
-## Importing real sessions: Hermes and Cursor (curator's second door)
+## Importing real sessions: Hermes, Cursor, Claude Code (curator's second door)
 
 The loop distils lessons from failures it produces itself. `sessions.py`
 opens a second legitimate door: **transcripts from host agents are evidence
@@ -631,6 +634,26 @@ and point at the copy for a complete snapshot. Chat history contains
 everything ever pasted into it: export redacts credential-shaped substrings
 by default (`--no-redact` exists for local processing only) — review
 `episodes.jsonl` before sharing it.
+
+### From Claude Code transcripts
+
+Claude Code writes one JSONL transcript per session under
+`~/.claude/projects/<slugified-cwd>/<session-uuid>.jsonl` (`$CLAUDE_CONFIG_DIR`
+overrides the root). The `claude` reader parses them defensively: tool
+results filed as user records are joined back to their `tool_use` calls,
+subagent sidechains are skipped, resumed sessions deduplicate re-appended
+records by `uuid`, and the real `cwd` comes from the records (the directory
+slug is lossy). Same pipeline as every other source — redacted, staged,
+gate-gated:
+
+```bash
+python -m open_dream_rsi --memory .dream_rsi dream --source claude
+python -m open_dream_rsi --memory .dream_rsi sessions export \
+    --source claude --out episodes.jsonl
+```
+
+0.3.9+ installs an `odr` console script, so `odr --memory .dream_rsi dream
+--source claude` is the same thing.
 
 ### Curator lessons as Hermes skills
 
@@ -854,7 +877,7 @@ python -m unittest discover -s tests      # full suite, ~2 min
 python scripts/fast_tests.py              # fast subset (slow bench/sandbox modules excluded), ~15 s
 ```
 
-392 tests at this commit, re-counted by CI on every push (the badge above
+397 tests at this commit, re-counted by CI on every push (the badge above
 shows the last green run, not a live count). Stdlib-only: benchmark
 behavioural contracts
 (greedy must solve nothing; the gated arm must dominate ε; the rollout must

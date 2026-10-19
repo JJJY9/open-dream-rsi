@@ -26,6 +26,9 @@ dependencies = []
 Homepage = "https://github.com/patrykorwat/open-dream-rsi"
 Repository = "https://github.com/patrykorwat/open-dream-rsi"
 
+[project.scripts]
+odr = "open_dream_rsi.cli:main"
+
 [tool.setuptools.packages.find]
 include = ["open_dream_rsi*"]
 

@@ -13,9 +13,9 @@ CLI: `open_dream_rsi sentinel check --format claude`.
 
 ## Install
 
-1. Make the CLI importable — either `python3 -m pip install
-   git+https://github.com/patrykorwat/open-dream-rsi` or run
-   from a checkout of this repo.
+1. Make the CLI importable: `python3 -m pip install open-dream-rsi`
+   (0.3.9+ ships an `odr` console script; from a checkout run
+   `pip install -e .`).
 
 2. Merge the snippet below into `~/.claude/settings.json` (or the project's
    `.claude/settings.json`). Adjust the command if you run from an

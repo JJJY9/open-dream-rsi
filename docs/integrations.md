@@ -374,12 +374,20 @@ codex mcp add open-dream-rsi -- python3 -m open_dream_rsi mcp \
 ### Claude Code
 
 ```bash
-claude mcp add open-dream-rsi -- python3 -m open_dream_rsi mcp \
-  --tasks /ABSOLUTE/PATH/open-dream-rsi/tasks.json \
-  --memory /ABSOLUTE/PATH/open-dream-rsi/.dream_rsi
+claude mcp add open-dream-rsi -- odr mcp \
+  --tasks /ABSOLUTE/PATH/tasks.json \
+  --memory /ABSOLUTE/PATH/.dream_rsi
 ```
 
+(`odr` is the console script installed with the package; on 0.3.8 or a bare
+checkout use `python3 -m open_dream_rsi` instead.)
+
 Check with `/mcp` inside a session.
+
+**Session import:** Claude Code transcripts under `~/.claude/projects` are
+first-class curator evidence — `odr --memory .dream_rsi dream --source
+claude` runs the whole cycle on your existing history (redacted, staged,
+gate-gated like every other source).
 
 ### Cursor (without MCP — hooks and files)
 

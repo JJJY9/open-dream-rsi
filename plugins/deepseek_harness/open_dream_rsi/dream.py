@@ -194,6 +194,8 @@ def ingest_sessions(memory, sessions_db: "str | Path", *,
     ``source="hermes"`` reads a Hermes ``state.db``; ``source="cursor"``
     reads the Cursor ``User`` dir (``state.vscdb``) directly — no MCP
     server involved, so this also works where MCP is blocked by policy.
+    ``source="claude"`` reads Claude Code JSONL transcripts under
+    ``~/.claude/projects`` (or the given projects dir).
 
     Returns {'new': n_sessions, 'added': n_lessons, 'probes': n_tasks,
              'deferred': n_deferred (endpoint failed; session left unseen)}.
@@ -214,13 +216,17 @@ def ingest_sessions(memory, sessions_db: "str | Path", *,
     state = _load_state(root)
     seen = set(state.get("seen_sessions", []))
 
-    if source not in ("hermes", "cursor"):
+    if source not in ("hermes", "cursor", "claude"):
         raise ValueError(f"unknown session source {source!r} "
-                         "(expected 'hermes' or 'cursor')")
+                         "(expected 'hermes', 'cursor' or 'claude')")
     if source == "cursor":
         from open_dream_rsi.sessions import read_cursor_sessions
         eps = read_cursor_sessions(user_dir=sessions_db,
                                    limit=limit + len(seen))
+    elif source == "claude":
+        from open_dream_rsi.sessions import read_claude_code_sessions
+        eps = read_claude_code_sessions(projects_dir=sessions_db,
+                                        limit=limit + len(seen))
     else:
         eps = read_hermes_sessions(sessions_db, limit=limit + len(seen))
     new = [e for e in eps if e.session_id not in seen][:limit]

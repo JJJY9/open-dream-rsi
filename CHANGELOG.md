@@ -7,6 +7,15 @@ truth.
 ## [0.3.9] — 2026-10-18
 
 ### Added
+- **`odr` console script** (`[project.scripts]`): `odr status`, `odr mcp …` —
+  one-line MCP config blocks; `uvx --from open-dream-rsi odr …` works with no
+  prior install.
+- **Claude Code session importer** (`read_claude_code_sessions`,
+  `dream --source claude`, `sessions export --source claude`): JSONL
+  transcripts under `~/.claude/projects` become curator evidence — tool
+  results joined to their calls, subagent sidechains skipped, resume
+  re-appends deduplicated; same redaction and promotion gate as every other
+  source.
 - **Docker image** (`Dockerfile`, `.dockerignore`): one command to try the
   project in a pinned, non-root environment; CI builds the image on every
   push.

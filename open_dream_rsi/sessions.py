@@ -16,6 +16,9 @@ Transcripts are hostile input. Everything read here is:
 * parsed defensively (undocumented, version-drifting schemas — a missing
   field yields an empty episode, never a crash).
 
+Stores covered: Hermes ``state.db``, Cursor ``state.vscdb``, and Claude Code
+JSONL transcripts (``~/.claude/projects``).
+
 Only the *shape* of the two stores is assumed (documented in README); all
 semantics come from the curator's validation gate.
 """
@@ -68,7 +71,7 @@ class SessionMessage:
 @dataclass
 class Episode:
     """One imported conversation, normalized across hosts."""
-    source: str                       # "hermes" | "cursor"
+    source: str                       # "hermes" | "cursor" | "claude"
     session_id: str
     title: str = ""
     cwd: str = ""
@@ -426,3 +429,191 @@ def lessons_to_skills(memory_or_root: Any, out_dir: "str | Path",
         path.write_text(text, encoding="utf-8")
         written.append(path)
     return written
+
+
+# -- Claude Code transcripts ---------------------------------------------------------
+
+_HARNESS_PREFIXES = ("<system-reminder>", "<command-name>", "<local-command",
+                     "Caveat: The messages below")
+
+
+def default_claude_projects_dir() -> Path:
+    """Platform default Claude Code transcript root — ``$CLAUDE_CONFIG_DIR``
+    overrides, else ``~/.claude``."""
+    import os
+    env = os.environ.get("CLAUDE_CONFIG_DIR")
+    base = Path(env) if env else Path(os.path.expanduser("~")) / ".claude"
+    return base / "projects"
+
+
+def _claude_ts(value: Any) -> float:
+    """ISO-8601 ``...Z`` timestamp -> epoch seconds (0.0 on junk). Python
+    3.10's ``fromisoformat`` does not parse the ``Z`` suffix — swap it."""
+    if not isinstance(value, str) or not value:
+        return 0.0
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _claude_text(content: Any) -> str:
+    """``message.content`` arrives as a plain string or a block list."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(str(b.get("text", "")) for b in content
+                         if isinstance(b, dict) and b.get("type") == "text"
+                         and isinstance(b.get("text"), str))
+    return ""
+
+
+def _claude_result_text(block: Dict[str, Any], structured: Any) -> str:
+    """Model-visible text of a tool_result block; falls back to the
+    structured ``toolUseResult.stdout`` when the inline copy is a stub."""
+    text = _claude_text(block.get("content"))
+    if not text and isinstance(structured, dict) \
+            and isinstance(structured.get("stdout"), str):
+        text = structured["stdout"]
+    return text
+
+
+def read_claude_code_sessions(projects_dir: "str | Path | None" = None,
+                              *, limit: Optional[int] = None,
+                              redact: bool = True) -> List[Episode]:
+    """Read episodes from Claude Code JSONL transcripts.
+
+    One ``<session-uuid>.jsonl`` per session under
+    ``~/.claude/projects/<slugified-cwd>/`` (``$CLAUDE_CONFIG_DIR``
+    overrides). Format notes (Claude Code 2.1.x, 2026-10): conversation
+    records are typed ``user``/``assistant`` and carry ``message.content``
+    as a plain string or a block list (``text``/``tool_use``/``tool_result``).
+    Tool RESULTS are filed as ``user`` records with a sibling
+    ``toolUseResult`` (an object or a bare string — decode defensively);
+    the matching call is the earlier ``tool_use`` block with the same
+    ``id``. ``isSidechain`` marks subagent chatter (skipped); resumed
+    sessions re-append records, so ``uuid`` is deduplicated (first copy
+    wins — later copies only fill fields this reader does not use). The
+    directory slug is lossy — the real ``cwd`` comes from each record.
+    Only ``*.jsonl`` directly inside a project dir is read; nested session
+    working dirs (``<id>/subagents/``) hold non-transcript files.
+    """
+    root = Path(projects_dir) if projects_dir else default_claude_projects_dir()
+    if not root.is_dir():
+        return []
+    files = sorted(root.glob("*/*.jsonl"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    if limit is not None:
+        files = files[:max(0, int(limit))]
+    out: List[Episode] = []
+    for path in files:
+        ep = _read_claude_transcript(path, redact=redact)
+        if ep is not None:
+            out.append(ep)
+    return out
+
+
+def _read_claude_transcript(path: Path, *,
+                            redact: bool) -> Optional[Episode]:
+    """Parse one transcript file; ``None`` when it holds no conversation."""
+    ep = Episode(source="claude", session_id=path.stem)
+    calls: dict = {}                    # tool_use id -> tool name
+    seen: set = set()                   # uuid dedup (resume re-appends)
+    started = 0.0
+    try:
+        raw = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        rtype = rec.get("type")
+        if rtype == "summary" and not ep.title \
+                and isinstance(rec.get("summary"), str):
+            ep.title = rec["summary"][:120]
+            continue
+        if rtype not in ("user", "assistant") or rec.get("isSidechain"):
+            continue
+        uuid = rec.get("uuid")
+        if isinstance(uuid, str) and uuid:
+            if uuid in seen:
+                continue
+            seen.add(uuid)
+        ts = _claude_ts(rec.get("timestamp"))
+        if ts and (not started or ts < started):
+            started = ts
+        cwd = rec.get("cwd")
+        if not ep.cwd and isinstance(cwd, str) and cwd:
+            ep.cwd = cwd
+        message = rec.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if rtype == "user":
+            if rec.get("toolUseResult") is not None:
+                # a tool RESULT filed as a user record — join with its call
+                text, name, tid = "", "tool", None
+                if isinstance(content, list):
+                    for block in content:
+                        if not isinstance(block, dict) \
+                                or block.get("type") != "tool_result":
+                            continue
+                        text = _claude_result_text(
+                            block, rec.get("toolUseResult"))
+                        tid = block.get("tool_use_id")
+                        break
+                elif isinstance(content, str):
+                    text = content
+                if isinstance(tid, str) and tid in calls:
+                    name = calls[tid]
+                elif not isinstance(content, list) and calls:
+                    # bare-string result: no tool_result block to carry the
+                    # id — the result follows its call in file order
+                    name = calls[next(reversed(calls))]
+                if text.strip():
+                    ep.messages.append(SessionMessage(
+                        role="tool", name=name,
+                        text=redact_secrets(text) if redact else text,
+                        timestamp=ts))
+                continue
+            text = _claude_text(content).strip()
+            if text and not text.startswith(_HARNESS_PREFIXES):
+                if not ep.title:
+                    ep.title = text[:120]
+                ep.messages.append(SessionMessage(
+                    role="user",
+                    text=redact_secrets(text) if redact else text,
+                    timestamp=ts))
+            continue
+        # assistant: prose kept; tool calls recorded only for the result join
+        if isinstance(content, list):
+            prose = []
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "text" \
+                        and isinstance(block.get("text"), str):
+                    prose.append(block["text"])
+                elif block.get("type") == "tool_use" \
+                        and isinstance(block.get("id"), str):
+                    calls[block["id"]] = str(block.get("name") or "tool")
+            text = "\n".join(p for p in prose if p.strip())
+        elif isinstance(content, str):
+            text = content
+        else:
+            text = ""
+        if text.strip():
+            ep.messages.append(SessionMessage(
+                role="assistant",
+                text=redact_secrets(text) if redact else text,
+                timestamp=ts))
+    if not ep.messages:
+        return None
+    ep.started_at = started
+    return ep

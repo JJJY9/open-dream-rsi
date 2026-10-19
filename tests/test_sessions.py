@@ -17,6 +17,7 @@ from open_dream_rsi.sessions import (
     episode_failures,
     lessons_to_skills,
     load_episodes,
+    read_claude_code_sessions,
     read_cursor_sessions,
     read_hermes_sessions,
     redact_secrets,
@@ -177,6 +178,110 @@ class TestCursorReader(unittest.TestCase):
     def test_empty_store_is_empty(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(read_cursor_sessions(tmp), [])
+
+
+class TestClaudeReader(unittest.TestCase):
+    """Claude Code JSONL transcripts (~/.claude/projects/<slug>/<uuid>.jsonl)."""
+
+    def _proj(self, tmp):
+        proj = Path(tmp) / "projects"
+        proj.mkdir(parents=True)
+        return proj
+
+    def _write(self, proj, slug, records, name=None):
+        d = proj / slug
+        d.mkdir()
+        path = d / (name or "11111111-2222-3333-4444-555555555555.jsonl")
+        path.write_text("\n".join(records), encoding="utf-8")
+        return path
+
+    def test_tool_result_join_roles_and_metadata(self):
+        proj = self._proj(tempfile.mkdtemp())
+        self._write(proj, "-home-me-proj", [
+            json.dumps({"type": "summary", "summary": "Fixing the parser"}),
+            json.dumps({"type": "user", "uuid": "u1", "cwd": "/home/me/proj",
+                        "timestamp": "2026-10-18T10:00:00.000Z",
+                        "message": {"role": "user",
+                                    "content": "Fix the parser"}}),
+            json.dumps({"type": "assistant", "uuid": "a1",
+                        "message": {"role": "assistant", "content": [
+                            {"type": "tool_use", "id": "toolu_1",
+                             "name": "Bash", "input": {"command": "pytest"}},
+                            {"type": "text", "text": "Running tests."}]}}),
+            json.dumps({"type": "user", "uuid": "u2",
+                        "toolUseResult": {"stdout": "2 failed"},
+                        "message": {"role": "user", "content": [
+                            {"type": "tool_result", "tool_use_id": "toolu_1",
+                             "content": "2 failed\n"}]}}),
+            json.dumps({"type": "user", "uuid": "u3",
+                        "message": {"role": "user",
+                                    "content": "<system-reminder>noise"}}),
+            json.dumps({"type": "assistant", "uuid": "a2",
+                        "message": {"role": "assistant", "content": [
+                            {"type": "text", "text": "Fixed it."}]}}),
+        ])
+        eps = read_claude_code_sessions(str(proj))
+        self.assertEqual(len(eps), 1)
+        ep = eps[0]
+        self.assertEqual(ep.source, "claude")
+        self.assertEqual(ep.session_id, "11111111-2222-3333-4444-555555555555")
+        self.assertEqual(ep.title, "Fixing the parser")   # summary record wins
+        self.assertEqual(ep.cwd, "/home/me/proj")         # from the record
+        roles = [(m.role, m.name) for m in ep.messages]
+        self.assertEqual(roles, [("user", ""), ("assistant", ""),
+                                 ("tool", "Bash"), ("assistant", "")])
+        self.assertNotIn("noise", "".join(m.text for m in ep.messages))
+        self.assertIn("2 failed", ep.messages[2].text)
+        self.assertGreater(ep.started_at, 0)
+
+    def test_string_tool_use_result_and_string_content(self):
+        proj = self._proj(tempfile.mkdtemp())
+        self._write(proj, "proj", [
+            json.dumps({"type": "assistant", "uuid": "a1",
+                        "message": {"role": "assistant",
+                                    "content": [{"type": "tool_use",
+                                                 "id": "t2", "name": "Read",
+                                                 "input": {}}]}}),
+            json.dumps({"type": "user", "uuid": "u1",
+                        "toolUseResult": "raw error string",
+                        "message": {"role": "user", "content": "boom"}}),
+        ])
+        ep = read_claude_code_sessions(str(proj))[0]
+        tool = [m for m in ep.messages if m.role == "tool"]
+        self.assertEqual(len(tool), 1)
+        self.assertEqual(tool[0].name, "Read")   # joined via tool_use_id
+        self.assertEqual(tool[0].text, "boom")
+
+    def test_sidechain_skipped_and_uuid_dedup(self):
+        proj = self._proj(tempfile.mkdtemp())
+        rec = json.dumps({"type": "user", "uuid": "u1",
+                          "message": {"role": "user", "content": "hello"}})
+        dup = json.dumps({"type": "user", "uuid": "u1",  # resume re-append
+                          "message": {"role": "user", "content": "hello"}})
+        side = json.dumps({"type": "user", "uuid": "u2", "isSidechain": True,
+                           "message": {"role": "user", "content": "subagent"}})
+        junk = "not json at all"
+        self._write(proj, "proj", [rec, dup, side, junk, rec])  # dup of u1 again
+        ep = read_claude_code_sessions(str(proj))[0]
+        self.assertEqual([m.text for m in ep.messages], ["hello"])
+
+    def test_empty_store_and_missing_dir(self):
+        self.assertEqual(read_claude_code_sessions(tempfile.mkdtemp()), [])
+        self.assertEqual(
+            read_claude_code_sessions("/nonexistent-claude-projects"), [])
+
+    def test_ingest_claude_source_defers_without_client(self):
+        from open_dream_rsi.dream import ingest_sessions
+        from open_dream_rsi.memory import DreamMemory
+        tmp = tempfile.mkdtemp()
+        proj = self._proj(Path(tmp) / "store")
+        self._write(proj, "proj", [
+            json.dumps({"type": "user", "uuid": "u1",
+                        "message": {"role": "user", "content": "do a thing"}})])
+        rep = ingest_sessions(DreamMemory(Path(tmp) / "mem"),
+                              str(proj), source="claude")
+        self.assertEqual(rep.get("deferred", 0), 1)
+        self.assertEqual(rep.get("new", 0), 0)  # stays unseen: 0.2.4 contract
 
 
 class TestFailureShaping(unittest.TestCase):

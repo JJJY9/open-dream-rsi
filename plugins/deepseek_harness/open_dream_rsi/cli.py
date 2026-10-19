@@ -109,6 +109,7 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     from open_dream_rsi.sessions import (
         episode_failures,
         load_episodes,
+        read_claude_code_sessions,
         read_cursor_sessions,
         read_hermes_sessions,
         write_episodes,
@@ -120,6 +121,9 @@ def cmd_sessions(args: argparse.Namespace) -> int:
                                        source=args.filter,
                                        limit=args.limit,
                                        redact=not args.no_redact)
+        elif args.source == "claude":
+            eps = read_claude_code_sessions(args.db, limit=args.limit,
+                                            redact=not args.no_redact)
         else:
             # --db accepts either the Cursor User dir or a state.vscdb copy
             db_arg = args.db
@@ -243,7 +247,8 @@ def cmd_dream(args: argparse.Namespace) -> int:
     cost), so any trigger — a Hermes hook, the MCP tool, or this CLI —
     can fire as often as it likes without overrunning the budget."""
     from open_dream_rsi.dream import dream_once
-    from open_dream_rsi.sessions import default_cursor_user_dir
+    from open_dream_rsi.sessions import (default_claude_projects_dir,
+                                         default_cursor_user_dir)
 
     client = None
     if not args.offline:
@@ -252,6 +257,9 @@ def cmd_dream(args: argparse.Namespace) -> int:
         # the Cursor store is a User DIR (state.vscdb inside), not a db file
         sessions_db = args.sessions or args.cursor_user_dir \
             or str(default_cursor_user_dir())
+    elif args.source == "claude":
+        # Claude Code transcripts live in a projects DIR of JSONL files
+        sessions_db = args.sessions or str(default_claude_projects_dir())
     else:
         sessions_db = args.sessions
     report = dream_once(
@@ -472,9 +480,11 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("--sessions", default=None,
                     help="host session store to import evidence from "
                          "(hermes: state.db path; cursor: the User dir)")
-    dr.add_argument("--source", default="hermes", choices=["hermes", "cursor"],
+    dr.add_argument("--source", default="hermes",
+                    choices=["hermes", "cursor", "claude"],
                     help="kind of the --sessions store (default hermes; "
-                         "cursor reads state.vscdb directly, no MCP needed)")
+                         "cursor reads state.vscdb directly, no MCP needed; "
+                         "claude reads ~/.claude/projects JSONL)")
     dr.add_argument("--cursor-user-dir", default=None,
                     help="Cursor User dir for --source cursor (default: the "
                          "platform location, e.g. %%APPDATA%%\\Cursor\\User)")
@@ -532,16 +542,19 @@ def main(argv: list[str] | None = None) -> int:
 
     sess = sub.add_parser(
         "sessions",
-        help="import host transcripts (Hermes state.db / Cursor state.vscdb) "
+        help="import host transcripts (Hermes state.db / Cursor "
+             "state.vscdb / Claude Code projects JSONL) "
              "as curator evidence — export to JSONL, then distill into "
              "staging lessons (promotion gate still decides activation)")
     sess_sub = sess.add_subparsers(dest="sessions_cmd", required=True)
 
     exp = sess_sub.add_parser("export", help="read a host store, write episodes.jsonl")
-    exp.add_argument("--source", required=True, choices=["hermes", "cursor"])
+    exp.add_argument("--source", required=True,
+                     choices=["hermes", "cursor", "claude"])
     exp.add_argument("--db", default=None,
-                     help="path to state.db (hermes) or Cursor User dir "
-                          "(default: platform Cursor location)")
+                     help="path to state.db (hermes), the Cursor User dir, "
+                          "or the Claude Code projects dir (default: the "
+                          "platform location)")
     exp.add_argument("--filter", default=None,
                      help="hermes only: session source filter (e.g. cli, desktop)")
     exp.add_argument("--limit", type=int, default=None)
