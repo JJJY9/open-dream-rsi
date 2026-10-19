@@ -15,7 +15,8 @@ truth.
 - **Evaluation and session-import docs split out of the README** —
   [docs/benchmarks.md](docs/benchmarks.md) (TravelPlanner protocol, tables, honest
   memory findings) and [docs/sessions.md](docs/sessions.md) (transcript import,
-  corrections, stores); README down to ~540 lines.
+  corrections, stores); README down to ~500 lines with a per-agent install
+  table as the Quick start.
 - **`odr` console script** (`[project.scripts]`): `odr status`, `odr mcp …` —
   one-line MCP config blocks; `uvx --from open-dream-rsi odr …` works with no
   prior install.

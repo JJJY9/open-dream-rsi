@@ -139,68 +139,31 @@ falls back to the greedy baseline.
 
 ## Quick start
 
-```bash
-pip install open-dream-rsi        # zero deps; installs the `odr` console script
-odr status                        # what the loop has learned (empty is fine)
-```
+| Agent | Install |
+|---|---|
+| **Hermes** | `pip install open-dream-rsi` · `hermes plugins install "https://github.com/patrykorwat/open-dream-rsi#odr-trigger"` · `hermes plugins enable odr-trigger` — or in the desktop app: Settings → Plugins → **Install from Git** |
+| **DeepSeek Harness** | `dsh plugin --profile <name> add dsh-open-dream-rsi` (npm bundle — no pip) |
+| **Claude Code** | `pip install open-dream-rsi` · `claude mcp add open-dream-rsi -- odr mcp --tasks /ABS/PATH/tasks.json --memory /ABS/PATH/.dream_rsi` |
+| **Codex CLI** | `pip install open-dream-rsi` · `codex mcp add open-dream-rsi -- odr mcp --tasks /ABS/PATH/tasks.json --memory /ABS/PATH/.dream_rsi` |
+| **OpenCode** | `pip install open-dream-rsi`, then the `mcp` block in [docs/integrations.md#opencode](docs/integrations.md#opencode) |
+| **Goose** | `git clone https://github.com/patrykorwat/open-dream-rsi && cd open-dream-rsi && ./scripts/odr_goose_setup.sh` — resolves your provider, starts the proxy, writes the config itself |
+| **Claude Cowork / claude.ai** | remote-only: `odr mcp --http --port 8800` behind your tunnel — [docs/integrations.md](docs/integrations.md) |
 
-(`dreamrsi` on PyPI is an unrelated project; this library is
-`open-dream-rsi`.)
-
-Using Hermes? One line: `hermes plugins install
-"https://github.com/patrykorwat/open-dream-rsi#odr-trigger"` (or the desktop
-**Install from Git** dialog), then `hermes plugins enable odr-trigger` —
-details in [docs/integrations.md](docs/integrations.md).
-
-**Point it at a model — or don't.** Any OpenAI-compatible endpoint works;
-keys are read only from the environment. The *model name is
-auto-detected* from the endpoint (`GET /v1/models`), so pointing at a local
-vLLM/Ollama needs only the base URL:
+Point the dreamer at any OpenAI-compatible endpoint — or nowhere: the model
+is auto-detected from `/v1/models`, so a local vLLM/Ollama needs only the
+base URL.
 
 ```bash
 export OPENAI_BASE_URL=http://127.0.0.1:8000/v1   # vLLM / Ollama / any gateway
 export OPENAI_API_KEY=***                         # any token for local servers
-# no ODR_LLM_MODEL needed: the first model the endpoint serves is used.
-# Pin ODR_LLM_MODEL only to select among several served models.
 ```
 
-Queue a task in `tasks.json`:
-
-```json
-[{
-  "task_id": "add1",
-  "category": "math",
-  "prompt": "Implement add(a, b) returning the sum.",
-  "tests": [{"call": "add(2, 3)", "expected": 5}],
-  "max_attempts": 3
-}]
-```
-
-Run the supervisor — once, as a daemon, or as the recommended automated
-`dream` cycle (one command that imports session evidence, runs the promotion
-gate when the evidence justifies it, and publishes earned lessons as skills):
-
-```bash
-python -m open_dream_rsi --memory .dream_rsi dream \
-    --sessions ~/.hermes/state.db --skills-out ~/.hermes/skills/odr-curated
-python -m open_dream_rsi loop --tasks tasks.json --interval 300   # daemon mode
-python -m open_dream_rsi loop --tasks tasks.json --once           # single cycle
-python -m open_dream_rsi status                                   # what it learned
-```
-
-No key? Everything deterministic still runs: `bench`, `bench-policy`,
-`gate-replay` and the dashboard all use a scripted mock client. A full
-in-process walkthrough with a mock OpenAI server: `examples/live_loop_demo.py`.
-
-Don't want the CLI at all? **The same loop runs as an MCP server inside your
-existing coding agent** — that is the fastest way in:
-
-```bash
-python3 -m open_dream_rsi mcp --tasks ./tasks.json --memory ./.dream_rsi
-```
-
-…the exact config block for your agent lives in
-[docs/integrations.md](docs/integrations.md).
+No agent handy? The bare CLI runs the same loop: `odr --memory .dream_rsi
+loop --tasks tasks.json --once` (drop `--once` for a daemon). No key?
+`python examples/live_loop_demo.py` runs the whole cycle on an in-process
+mock server. (`dreamrsi` on PyPI is an unrelated project — this library is
+`open-dream-rsi`.) Per-host details, MCP blocks, troubleshooting:
+**[docs/integrations.md](docs/integrations.md)**.
 
 ---
 
