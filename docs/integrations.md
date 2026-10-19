@@ -11,14 +11,18 @@ No extra Python packages are required — the server is stdlib-only.
 ## 0. One-time: install the library
 
 ```bash
-git clone https://github.com/patrykorwat/open-dream-rsi.git
-cd open-dream-rsi
-pip install -e .
+pip install open-dream-rsi        # zero runtime deps, Python 3.10+
 ```
 
-Sanity check the server (it waits on stdin — Ctrl-C to exit)::
+0.3.9+ also installs the `odr` console script; on 0.3.8 use
+`python3 -m open_dream_rsi` in the commands below. From a checkout:
+`pip install -e .`.
 
-    python3 -m open_dream_rsi mcp
+Sanity check the server (it waits on stdin — Ctrl-C to exit):
+
+```bash
+odr mcp        # or: python3 -m open_dream_rsi mcp
+```
 
 If it starts without a traceback, you are ready to plug in.
 
