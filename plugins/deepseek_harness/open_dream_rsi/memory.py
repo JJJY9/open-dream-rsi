@@ -20,6 +20,7 @@ Everything the agent learns survives restarts:
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -29,6 +30,30 @@ from open_dream_rsi.core.tree import DiscoveryTree, TreeNode
 #: How many already-distilled failure snippets to remember per category
 #: (bounded call economy: the same failure evidence never re-buys a call).
 MAX_DIGESTED_PER_CATEGORY = 64
+
+#: Characters Windows rejects in a filename component.
+_TASK_FILE_INVALID = re.compile(r'[<>:"/\\|?*\x00-\x1f%]')
+
+#: Device names Windows resolves even with an extension (``CON.json``).
+_WIN_RESERVED = {"CON", "PRN", "AUX", "NUL",
+                 *(f"COM{i}" for i in range(1, 10)),
+                 *(f"LPT{i}" for i in range(1, 10))}
+
+
+def _task_file_stem(task_id: str) -> str:
+    """Map an opaque task id to a portable filename stem.
+
+    Probe ids carry a Cursor session id (``probe:<uuid>``), so ``:`` and other
+    Windows-illegal characters are common. Percent-encoding them (and ``%``
+    itself) keeps the mapping injective; ordinary ids keep their historical
+    filenames, so existing ``trees/*.json`` archives still load.
+    """
+    stem = _TASK_FILE_INVALID.sub(lambda m: f"%{ord(m.group()):02X}", task_id)
+    while stem and stem[-1] in " .":
+        stem = stem[:-1] + f"%{ord(stem[-1]):02X}"
+    if stem.split(".", 1)[0].upper() in _WIN_RESERVED:
+        stem = "%5F" + stem
+    return stem or "%"
 
 
 class DreamMemory:
@@ -187,13 +212,15 @@ class DreamMemory:
 
     def archive_tree(self, task_id: str, tree: DiscoveryTree) -> None:
         payload = {
+            "task_id": task_id,
             "root_id": tree.root_id,
             "nodes": [vars(n) for n in tree.nodes.values()],
         }
-        self._save(self.root / "trees" / f"{task_id}.json", payload)
+        self._save(self.root / "trees" / f"{_task_file_stem(task_id)}.json",
+                   payload)
 
     def load_tree(self, task_id: str) -> Optional[DiscoveryTree]:
-        path = self.root / "trees" / f"{task_id}.json"
+        path = self.root / "trees" / f"{_task_file_stem(task_id)}.json"
         if not path.exists():
             return None
         data = self._load(path, None)

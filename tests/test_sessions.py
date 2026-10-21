@@ -346,13 +346,14 @@ class TestSkillsExport(unittest.TestCase):
             self.assertIn("name: odr-median", text)
             self.assertIn("Sort first, return the mean", text)
             self.assertNotIn("staging one", text)
-            self.assertNotIn("rejected", written[0].read_text())
+            self.assertNotIn("rejected", written[0].read_text(encoding="utf-8"))
 
     def test_include_staging_option(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _memory_with_lessons(tmp)
             text = lessons_to_skills(root, Path(tmp) / "s2",
-                                     only_active=False)[0].read_text()
+                                     only_active=False)[0].read_text(
+                                         encoding="utf-8")
             self.assertIn("staging one", text)
 
     def test_category_filter(self):

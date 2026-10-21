@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -930,7 +931,16 @@ def cmd_gate_replay(args: argparse.Namespace) -> int:
         head, sep, tail = rest.partition("=")
         if not sep:                      # no NAME= prefix — whole spec is path
             head, tail = "", rest
-        path, ksep, rec_key = tail.partition(":")
+        # A Windows drive ("C:\data.json") also contains a colon; only a
+        # suffix that cannot be a path fragment is a records key, and a path
+        # that exists in full always wins.
+        if re.match(r"^[A-Za-z]:", tail) and tail.count(":") == 1:
+            path, ksep, rec_key = tail, "", ""
+        else:
+            path, ksep, rec_key = tail.rpartition(":")
+            if (not ksep or not rec_key or "\\" in rec_key
+                    or "/" in rec_key or Path(tail).exists()):
+                path, rec_key, ksep = tail, "", ""
         filters = [f for f in filt.split(",") if f]
         return head or path, path, (rec_key if ksep else None), filters
 

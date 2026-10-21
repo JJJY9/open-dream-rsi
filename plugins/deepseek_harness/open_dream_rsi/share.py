@@ -91,7 +91,8 @@ def _pull(cwd: Path) -> None:
 def _git(cwd: Path, *args: str, check: bool = True) -> str:
     cmd = ["git", "-C", str(cwd), *args]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        r = subprocess.run(cmd, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=180)
     except FileNotFoundError as exc:
         raise LessonShareError("git executable not found — stores need git") from exc
     if check and r.returncode != 0:
@@ -145,7 +146,8 @@ def resolve_store(store: "str | Path", *, cache_root: Optional[Path] = None,
     s = str(store)
     if _URL_RE.match(s) or s.endswith(".git"):
         base = Path(cache_root) if cache_root else Path.cwd()
-        leaf = s.rstrip("/").split("/")[-1]
+        # Windows paths use backslashes and carry a drive colon; split both.
+        leaf = re.split(r"[/\\]", s.rstrip("/\\"))[-1]
         name = re.sub(r"[^A-Za-z0-9._-]+", "_",
                       leaf[:-4] if leaf.endswith(".git") else leaf) or "store"
         dest = base / "lesson_stores" / name
@@ -414,11 +416,13 @@ def export_worlds(memory_or_root: Any, store: "str | Path", *,
     trees_dir = root / TREES_DIR
     paths = sorted(trees_dir.glob("*.json")) if trees_dir.exists() else []
     for path in paths:
-        task_id = path.stem
-        if task_ids and task_id not in task_ids:
-            continue
         data = _load_json(path, None)
         if not isinstance(data, dict) or not isinstance(data.get("nodes"), list):
+            continue
+        # Archived ids may be percent-encoded in the filename (Windows-illegal
+        # characters); the payload carries the original id when available.
+        task_id = str(data.get("task_id") or path.stem)
+        if task_ids and task_id not in task_ids:
             continue
         payload = {"task_id": task_id, "tree": _redact_deep(data)}
         out = store_dir / TREES_DIR / _world_file_name(task_id, taken)
