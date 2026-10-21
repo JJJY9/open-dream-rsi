@@ -25,7 +25,11 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-DEFAULT_TIMEOUT = 120.0
+#: Per-call HTTP timeout. 900 s default: proposal calls legitimately generate
+#: multi-kB reports/code and a shared local vLLM instance queues behind other
+#: consumers — at 120 s those became the dominant failure ("timed out" events
+#: burning API budget). Override with ODR_LLM_TIMEOUT (seconds).
+DEFAULT_TIMEOUT = float(os.environ.get("ODR_LLM_TIMEOUT", "900.0"))
 
 #: Model discovery GET timeout (the /models listing must never stall a run).
 _DISCOVERY_TIMEOUT = 30.0
