@@ -102,7 +102,23 @@ class PermuteGate:
         self.attempts[session] = self.attempts.get(session, 0) + 1
 
 
+def _force_utf8_stdio() -> None:
+    """MCP stdio is UTF-8; Windows consoles default to the ANSI codepage.
+
+    Without this, non-ASCII JSON (Polish notes, Chinese paths) is mangled or
+    raises ``UnicodeEncodeError`` on write and ``UnicodeDecodeError`` on read.
+    """
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8")
+            except (OSError, ValueError):
+                pass
+
+
 def main() -> None:
+    _force_utf8_stdio()
     note_file = os.environ.get("SENTINEL_NOTE_FILE", "/tmp/odr_sentinel_notes.jsonl")
     state_file = os.environ.get("SENTINEL_STATE_FILE", "/tmp/odr_sentinel_state.json")
     call_log = os.environ.get("ODR_CALL_LOG", "")

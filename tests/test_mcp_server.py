@@ -21,7 +21,7 @@ def spawn(env_extra):
     return subprocess.Popen(
         [sys.executable, "-m", "open_dream_rsi.mcp_server"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        env=env, text=True, bufsize=1)
+        env=env, text=True, encoding="utf-8", bufsize=1)
 
 
 class McpServerTest(unittest.TestCase):
@@ -79,6 +79,25 @@ class McpServerTest(unittest.TestCase):
         t2 = replies[3]["result"]["content"][0]["text"]
         self.assertIn("brak znanej klasy", t1)   # first sighting: silent
         self.assertNotIn("brak znanej klasy", t2)  # repeat: note emitted
+
+    def test_stdio_stays_utf8_under_a_gbk_console(self):
+        """Windows defaults stdio to the ANSI codepage; MCP is UTF-8.
+
+        The request carries non-ASCII text and the fallback reply contains
+        Polish ``ł`` — neither survives a GBK stdin/stdout pair.
+        """
+        replies, _ = self._serve(
+            {"SENTINEL_SESSION": "sesja-中文", "PYTHONIOENCODING": "gbk"},
+            [{"jsonrpc": "2.0", "id": 1, "method": "initialize",
+              "params": {}},
+             {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+              "params": {"name": "sentinel_check", "arguments": {
+                  "tool": "unknown_tool", "error_excerpt": "模糊错误"}}}])
+        self.assertEqual(
+            replies[1]["result"]["serverInfo"]["name"],
+            "odr-sentinel-sandbox")
+        text = replies[2]["result"]["content"][0]["text"]
+        self.assertIn("błędu", text)
 
     def test_cold_arm_no_sentinel(self):
         replies, _ = self._serve({"SENTINEL_SESSION": "t3",
