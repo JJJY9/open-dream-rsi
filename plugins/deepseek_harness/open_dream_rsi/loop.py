@@ -69,7 +69,9 @@ REFINE_USER_TEMPLATE = """Task [{category}]: {prompt}
 Test cases (call -> expected):
 {tests}
 
-Your best previous solution (may be absent):
+Best previous solution in this category (from a DIFFERENT task — it may not
+exist; treat it as a style/conventions reference only, its task-specific
+logic usually does NOT transfer to the task above):
 {recipe}
 
 Branch you are expanding from (code already tried on this branch, may be absent):

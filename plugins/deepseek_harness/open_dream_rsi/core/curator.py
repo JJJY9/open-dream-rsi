@@ -88,7 +88,8 @@ LESSON_CONTRACT = (
     "Reply with ONLY one fenced ```json``` block containing an array of "
     "objects, each exactly: {{\"trigger\": \"...\", \"text\": \"...\"}}. "
     "'trigger' is 1-4 lowercase keywords tying the lesson to this failure "
-    "family; 'text' is one actionable insight in at most 3000 characters, "
+    "family — separate the keywords with SINGLE SPACES, never commas or "
+    "semicolons; 'text' is one actionable insight in at most 3000 characters, "
     "grounded ONLY in the evidence shown. Be SPECIFIC, not terse: name the "
     "observable signal (the exact error shape, tool, or state that "
     "recurs), the mechanism that made the attempt fail, and the bounded "
@@ -144,18 +145,28 @@ def validate_lesson_items(items: Any, max_lessons: int) -> List[Dict[str, str]]:
         raise LessonValidationError("payload is not a JSON array")
     out: List[Dict[str, str]] = []
     seen = set()
+    reasons: List[str] = []
     for it in items:
         if not isinstance(it, dict):
-            raise LessonValidationError("lesson entry is not an object")
+            reasons.append("entry is not an object")
+            continue
         trig = str(it.get("trigger", "")).strip()
         text = str(it.get("text", "")).strip()
         words = normalize(trig).split()
         if not (MIN_TRIGGER_WORDS <= len(words) <= MAX_TRIGGER_WORDS):
-            raise LessonValidationError(
-                f"trigger must be {MIN_TRIGGER_WORDS}-{MAX_TRIGGER_WORDS} words, got {trig!r}")
+            # Tolerate comma/semicolon-separated keyword lists (LLMs produce
+            # "traceback, timeout" despite the contract): fold to the
+            # fragments when the joined form fits the word budget.
+            folded = " ".join(w for w in re.split(r"[,;/]+", trig) if w.strip())
+            if MIN_TRIGGER_WORDS <= len(folded.split()) <= MAX_TRIGGER_WORDS:
+                trig = folded
+                words = folded.split()
+            else:
+                reasons.append(f"trigger width {trig!r}")
+                continue
         if not (20 <= len(text) <= MAX_LESSON_CHARS):
-            raise LessonValidationError(
-                f"lesson text must be 20-{MAX_LESSON_CHARS} chars, got {len(text)}")
+            reasons.append(f"text len {len(text)}")
+            continue
         key = lesson_key({"trigger": trig, "text": text})
         if key in seen:
             continue
@@ -163,6 +174,11 @@ def validate_lesson_items(items: Any, max_lessons: int) -> List[Dict[str, str]]:
         out.append({"trigger": trig, "text": text})
         if len(out) >= max_lessons:
             break
+    if not out:
+        # All-or-nothing (the old behaviour) destroyed mixed payloads: one
+        # malformed trigger discarded every good lesson with it. Raise only
+        # when nothing is salvageable; the message feeds the repair loop.
+        raise LessonValidationError("; ".join(reasons[:3]) or "empty payload")
     return out
 
 
