@@ -51,46 +51,40 @@ libraries: [docs/comparison.md](docs/comparison.md).
 
 ---
 
-## Try it — no API key, no install
+## Quick start
 
-From a fresh clone, two commands show the whole loop on your machine. The
-demo spins up a mock OpenAI server in-process, so nothing leaves your laptop:
+| Agent | Install |
+|---|---|
+| **Hermes** | `pip install open-dream-rsi` · `hermes plugins install "https://github.com/patrykorwat/open-dream-rsi#odr-trigger"` · `hermes plugins enable odr-trigger` — or in the desktop app: Settings → Plugins → **Install from Git** |
+| **DeepSeek Harness** | `dsh plugin --profile <name> add dsh-open-dream-rsi` (npm bundle — no pip) |
+| **Claude Code** | `pip install open-dream-rsi` · `claude mcp add open-dream-rsi -- odr mcp --tasks /ABS/PATH/tasks.json --memory /ABS/PATH/.dream_rsi` |
+| **Codex CLI** | `pip install open-dream-rsi` · `codex mcp add open-dream-rsi -- odr mcp --tasks /ABS/PATH/tasks.json --memory /ABS/PATH/.dream_rsi` |
+| **OpenCode** | `pip install open-dream-rsi`, then the `mcp` block in [docs/integrations.md#opencode](docs/integrations.md#opencode) |
+| **Goose** | `git clone https://github.com/patrykorwat/open-dream-rsi && cd open-dream-rsi && ./scripts/odr_goose_setup.sh` — resolves your provider, starts the proxy, writes the config itself |
+| **Claude Cowork / claude.ai** | remote-only: `odr mcp --http --port 8800` behind your tunnel — [docs/integrations.md](docs/integrations.md) |
 
-```bash
-git clone https://github.com/patrykorwat/open-dream-rsi.git
-cd open-dream-rsi
-python examples/live_loop_demo.py          # full dream cycle, ~10 s
-python -m open_dream_rsi bench --cycles 10 --markdown   # deterministic self-check
-```
+The `odr` console script ships from **0.3.9** — until that release is on
+PyPI, substitute `python3 -m open_dream_rsi` (works on 0.3.8) or install
+from a checkout (`pip install -e .`).
 
-The demo solves one task against a mock model that *fails on purpose* the
-first time, records the failure into a Discovery Tree, "dreams" over the
-recorded history between cycles, and reuses the verified fix afterwards —
-watch the cycle lines: the first cycle pays the failure tax (6 API calls),
-every later cycle solves from memory in 3. The benchmark prints the
-cold-baseline comparison (53% fewer calls at equal solve quality, re-run on
-every commit in CI).
-
-**Then point it at a real model** — any OpenAI-compatible endpoint, keys from
-the environment only, model name auto-detected: see [Quick start](#quick-start).
-
-## Docker (isolated sandbox)
-
-The sandbox already runs generated code as a `python -I` subprocess with a
-scrubbed environment and resource limits. The image wraps the whole system in
-a non-root, version-pinned environment so reproducibility is free; for a
-stronger sandbox jail, install `bubblewrap` in a derived image and point
-`ODR_SANDBOX_CMD` at it (see the Security model section):
+Point the dreamer at any OpenAI-compatible endpoint — or nowhere: the model
+is auto-detected from `/v1/models`, so a local vLLM/Ollama needs only the
+base URL.
 
 ```bash
-docker build -t open-dream-rsi .
-docker run --rm open-dream-rsi status
-# journal + artifacts persist in a mounted volume:
-docker run --rm --mount type=bind,src=$PWD/.dream_rsi,dst=/work/.dream_rsi \
-  open-dream-rsi loop --tasks tasks.json
+export OPENAI_BASE_URL=http://127.0.0.1:8000/v1   # vLLM / Ollama / any gateway
+export OPENAI_API_KEY=***                         # any token for local servers
 ```
 
-CI builds this image on every push.
+No agent handy? The bare CLI runs the same loop: `odr --memory .dream_rsi
+loop --tasks tasks.json --once` (drop `--once` for a daemon). No key?
+`python examples/live_loop_demo.py` runs the whole cycle on an in-process
+mock server. (`dreamrsi` on PyPI is an unrelated project — this library is
+`open-dream-rsi`.) Per-host details, MCP blocks, troubleshooting:
+**[docs/integrations.md](docs/integrations.md)**. The key-free walkthrough
+and the Docker image: [docs/try-it.md](docs/try-it.md).
+
+---
 
 ## How it works
 
@@ -134,40 +128,6 @@ recorded tree. A candidate replaces the incumbent only on evidence — and
 the incumbent is re-scored on the *current* tree, not trusted at its stored
 score. A crashing or cheating policy can never break the loop: expansion
 falls back to the greedy baseline.
-
----
-
-## Quick start
-
-| Agent | Install |
-|---|---|
-| **Hermes** | `pip install open-dream-rsi` · `hermes plugins install "https://github.com/patrykorwat/open-dream-rsi#odr-trigger"` · `hermes plugins enable odr-trigger` — or in the desktop app: Settings → Plugins → **Install from Git** |
-| **DeepSeek Harness** | `dsh plugin --profile <name> add dsh-open-dream-rsi` (npm bundle — no pip) |
-| **Claude Code** | `pip install open-dream-rsi` · `claude mcp add open-dream-rsi -- odr mcp --tasks /ABS/PATH/tasks.json --memory /ABS/PATH/.dream_rsi` |
-| **Codex CLI** | `pip install open-dream-rsi` · `codex mcp add open-dream-rsi -- odr mcp --tasks /ABS/PATH/tasks.json --memory /ABS/PATH/.dream_rsi` |
-| **OpenCode** | `pip install open-dream-rsi`, then the `mcp` block in [docs/integrations.md#opencode](docs/integrations.md#opencode) |
-| **Goose** | `git clone https://github.com/patrykorwat/open-dream-rsi && cd open-dream-rsi && ./scripts/odr_goose_setup.sh` — resolves your provider, starts the proxy, writes the config itself |
-| **Claude Cowork / claude.ai** | remote-only: `odr mcp --http --port 8800` behind your tunnel — [docs/integrations.md](docs/integrations.md) |
-
-The `odr` console script ships from **0.3.9** — until that release is on
-PyPI, substitute `python3 -m open_dream_rsi` (works on 0.3.8) or install
-from a checkout (`pip install -e .`).
-
-Point the dreamer at any OpenAI-compatible endpoint — or nowhere: the model
-is auto-detected from `/v1/models`, so a local vLLM/Ollama needs only the
-base URL.
-
-```bash
-export OPENAI_BASE_URL=http://127.0.0.1:8000/v1   # vLLM / Ollama / any gateway
-export OPENAI_API_KEY=***                         # any token for local servers
-```
-
-No agent handy? The bare CLI runs the same loop: `odr --memory .dream_rsi
-loop --tasks tasks.json --once` (drop `--once` for a daemon). No key?
-`python examples/live_loop_demo.py` runs the whole cycle on an in-process
-mock server. (`dreamrsi` on PyPI is an unrelated project — this library is
-`open-dream-rsi`.) Per-host details, MCP blocks, troubleshooting:
-**[docs/integrations.md](docs/integrations.md)**.
 
 ---
 
