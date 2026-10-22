@@ -63,9 +63,8 @@ libraries: [docs/comparison.md](docs/comparison.md).
 | **Goose** | `git clone https://github.com/patrykorwat/open-dream-rsi && cd open-dream-rsi && ./scripts/odr_goose_setup.sh` — resolves your provider, starts the proxy, writes the config itself |
 | **Claude Cowork / claude.ai** | remote-only: `odr mcp --http --port 8800` behind your tunnel — [docs/integrations.md](docs/integrations.md) |
 
-The `odr` console script ships from **0.3.9** — until that release is on
-PyPI, substitute `python3 -m open_dream_rsi` (works on 0.3.8) or install
-from a checkout (`pip install -e .`).
+The `odr` console script ships with the package (0.3.9+); from a bare
+checkout use `python3 -m open_dream_rsi` or `pip install -e .`.
 
 Point the dreamer at any OpenAI-compatible endpoint — or nowhere: the model
 is auto-detected from `/v1/models`, so a local vLLM/Ollama needs only the

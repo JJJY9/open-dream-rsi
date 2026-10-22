@@ -24,6 +24,8 @@ Config (plugins.entries.odr-trigger.settings.*):
   provider     LLM endpoint preset      (default: local)
   model        model override           (default: env ODR_LLM_MODEL)
   budget       max API calls per FULL dream (default 20)
+  odr_root     checkout the CHILD imports open_dream_rsi from (default env
+               ODR_ROOT, else /opt/data/workspace/odr-work)
 """
 from __future__ import annotations
 
@@ -61,6 +63,10 @@ def _resolve() -> Dict[str, Any]:
                          or os.environ.get("OPENAI_BASE_URL")),
         "budget": int(_cfg("budget", 20)),
         "min_interval_seconds": float(_cfg("min_interval_seconds", 60)),
+        # empty default -> _odr_root() fallback chain (ODR_ROOT env ->
+        # /opt/odr -> sibling checkout -> installed package); deployments
+        # that must dodge a stale /opt/odr set the setting explicitly
+        "odr_root": str(_cfg("odr_root", os.environ.get("ODR_ROOT") or "")),
     }
 
 
@@ -88,8 +94,23 @@ def on_session_end(**kw) -> None:
         env = {k: v for k, v in os.environ.items()
                if k.split("_")[0] in ("PATH", "HOME", "USER", "LANG",
                                       "LC_ALL", "TERM", "SHELL", "TMPDIR")
-               or k.startswith("XDG_")}
-        root = _odr_root()
+               or k.startswith("XDG_")
+               or k.startswith("ODR_")}
+        # OPENAI_* is deliberately NOT inherited from the host env: the
+        # settings-driven OPENAI_BASE_URL below is the deployment's source
+        # of truth, and a stray host value would silently retarget the
+        # child to a different endpoint.
+        # The child must import the checkout this deployment actually runs
+        # (odr-work), not a stale root-owned copy: prefer the configured
+        # odr_root for BOTH ODR_ROOT and PYTHONPATH — _odr_root() alone
+        # would fall back to /opt/odr because the hook process has no
+        # ODR_ROOT in its own environment.
+        root_cfg = cfg.get("odr_root")
+        root = root_cfg if (root_cfg
+                            and Path(root_cfg, "open_dream_rsi").is_dir()
+                            ) else _odr_root()
+        if root_cfg and Path(root_cfg, "open_dream_rsi").is_dir():
+            env["ODR_ROOT"] = root_cfg
         if root:
             env["PYTHONPATH"] = root
         env.setdefault("PYTHONUNBUFFERED", "1")
@@ -140,9 +161,7 @@ def _odr_root() -> str:
         return _ROOT
     candidates = [os.environ.get("ODR_ROOT", ""), "/opt/odr"]
     here = Path(__file__).resolve()
-    # sibling checkout: repo root sits one dir up (odr-trigger/) or two
-    # (the legacy plugins/x/ layout) — accept either
-    candidates += [str(p) for p in here.parents[1:3]]
+    candidates.append(str(here.parents[2]))  # .../open-dream-rsi/plugins/x/..
     for c in candidates:
         if c and (Path(c) / "open_dream_rsi").is_dir():
             _ROOT = c

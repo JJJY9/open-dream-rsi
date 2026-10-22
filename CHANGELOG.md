@@ -4,7 +4,7 @@ All notable changes to `open-dream-rsi` are documented here. Versions 0.3.0 and
 earlier are summarized from the commit history; the full log is the source of
 truth.
 
-## [0.3.9] — 2026-10-18
+## [0.3.9] — 2026-10-22
 
 ### Added
 - **Hermes one-line plugin install**: the `odr-trigger` plugin now lives at
@@ -62,6 +62,23 @@ truth.
   promotion gate.
 - **Sandbox result cache** (opt-in): LRU+TTL keyed by file contents; only
   completed runs are cached.
+
+### Fixed
+- **LLM call timeout is env-tunable** (`ODR_LLM_TIMEOUT`, default 900 s; was a
+  hard 120 s): proposal calls legitimately generate multi-kB reports and queue
+  behind other consumers on a shared vLLM — at 120 s those aborts became the
+  dominant failure and still burned API budget.
+- **Category recipes are labelled as cross-task style references** in the
+  proposal prompt: a same-category "best solution" from a different task used
+  to steer whole probe trees (e.g. a Fibonacci snippet seeded into unrelated
+  task families).
+- **Curator salvage**: mixed lesson payloads no longer die all-or-nothing —
+  valid entries survive one malformed sibling; comma/semicolon triggers fold
+  into the 1-4 word budget; the contract demands single-space keywords.
+- **odr-trigger (Hermes plugin)**: `settings.odr_root` pins the checkout the
+  dream child imports from, `ODR_*` environment passes through to the child,
+  and `OPENAI_*` stays settings-driven (no stray host override retargeting
+  the endpoint).
 
 ## [0.3.8] — 2026-10-18
 
