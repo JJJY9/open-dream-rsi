@@ -23,7 +23,7 @@ Config (plugins.entries.odr-trigger.settings.*):
   skills_out   where SKILL.md files go  (default: $HERMES_HOME/skills/odr-curated)
   provider     LLM endpoint preset      (default: local)
   model        model override           (default: env ODR_LLM_MODEL)
-  budget       max API calls per FULL dream (default 20)
+  budget       max API calls per FULL dream (default 100)
   odr_root     checkout the CHILD imports open_dream_rsi from (default env
                ODR_ROOT, else /opt/data/workspace/odr-work)
 """
@@ -61,7 +61,7 @@ def _resolve() -> Dict[str, Any]:
         "base_url": _cfg("base_url",
                          os.environ.get("ODR_LLM_BASE_URL")
                          or os.environ.get("OPENAI_BASE_URL")),
-        "budget": int(_cfg("budget", 20)),
+        "budget": int(_cfg("budget", 100)),
         "min_interval_seconds": float(_cfg("min_interval_seconds", 60)),
         # empty default -> _odr_root() fallback chain (ODR_ROOT env ->
         # /opt/odr -> sibling checkout -> installed package); deployments

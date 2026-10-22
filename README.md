@@ -225,7 +225,7 @@ nothing new to learn:
 | Tier | Triggered when | What runs |
 |---|---|---|
 | **maintenance** | quiet call (no new evidence, recent last dream) | ingest scan (cheap), ALM stale/supersede/archive/GC, skills republish — **zero LLM** |
-| **full** | `min_new_evidence` (default 3) new failure-shaped sessions, OR `max_age_seconds` (default 6 h) since the last full dream | + online attempts, dreaming, paired-replay promotion gate (`budget`, default 20 API calls) |
+| **full** | `min_new_evidence` (default 3) new failure-shaped sessions, OR `max_age_seconds` (default 6 h) since the last full dream | + online attempts, dreaming, paired-replay promotion gate (`budget`, default 100 API calls) |
 
 A busy day dreams a few times, a quiet day once, an idle day never;
 concurrent calls collapse on a single-instance lock. **Probes are queued

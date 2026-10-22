@@ -308,7 +308,7 @@ def dream_once(memory_root: "str | Path", *,
                session_source: str = "hermes",
                skills_out: "str | Path | None" = None,
                client=None, tasks: Optional[List[Any]] = None,
-               budget: int = 20, max_tokens: int = 100_000,
+               budget: int = 100, max_tokens: int = 100_000,
                category: Optional[str] = None,
                min_new_evidence: int = DEFAULT_MIN_NEW_EVIDENCE,
                max_age_seconds: float = DEFAULT_MAX_AGE_SECONDS) -> Dict[str, Any]:

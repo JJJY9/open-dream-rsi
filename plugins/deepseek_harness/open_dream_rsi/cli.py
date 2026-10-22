@@ -103,6 +103,15 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_metrics(args: argparse.Namespace) -> int:
+    """Success metrics: is the loop actually working? (derived from events)."""
+    from open_dream_rsi.metrics import collect, format_metrics
+
+    hours = getattr(args, "hours", None)
+    print(format_metrics(collect(args.memory, hours=hours)))
+    return 0
+
+
 def cmd_sessions(args: argparse.Namespace) -> int:
     """Import host transcripts (Hermes state.db / Cursor state.vscdb) as
     curator evidence — the offline second door for lessons (see README)."""
@@ -447,7 +456,7 @@ def main(argv: list[str] | None = None) -> int:
                       help="LLM endpoint; 'goose' borrows goose's own "
                            "provider/model/key from ~/.config/goose")
     loop.add_argument("--model", default=None)
-    loop.add_argument("--budget", type=int, default=20, help="max API calls per cycle")
+    loop.add_argument("--budget", type=int, default=100, help="max API calls per cycle")
     loop.add_argument("--max-tokens", type=int, default=2048,
                       help="completion budget per LLM call (raise for reasoning models)")
     loop.add_argument("--dream-iters", type=int, default=60)
@@ -495,8 +504,8 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("--model", default=None)
     dr.add_argument("--category", default=None,
                     help="force one KB category (default: per-episode cwd)")
-    dr.add_argument("--budget", type=int, default=20,
-                    help="max API calls for a FULL dream (default 20)")
+    dr.add_argument("--budget", type=int, default=100,
+                    help="max API calls for a FULL dream (default 100)")
     dr.add_argument("--max-tokens", type=int, default=100_000)
     dr.add_argument("--offline", action="store_true",
                     help="no LLM: lifecycle maintenance only")
@@ -524,6 +533,16 @@ def main(argv: list[str] | None = None) -> int:
 
     status = sub.add_parser("status", help="show learned policies, recipes, recent events")
     status.set_defaults(func=cmd_status)
+
+    metrics = sub.add_parser(
+        "metrics",
+        help="success metrics — per-category solve rates, llm-error and "
+             "lesson-rejection classes, curation throughput, lesson states, "
+             "backlog; answers 'is the loop actually working?'")
+    metrics.add_argument("--hours", type=float, default=None,
+                         help="limit event-derived sections to the last N hours "
+                              "(default: all recorded history)")
+    metrics.set_defaults(func=cmd_metrics)
 
     art = sub.add_parser(
         "artifacts",
