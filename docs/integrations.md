@@ -14,8 +14,7 @@ No extra Python packages are required — the server is stdlib-only.
 pip install open-dream-rsi        # zero runtime deps, Python 3.10+
 ```
 
-0.3.9+ also installs the `odr` console script; on 0.3.8 use
-`python3 -m open_dream_rsi` in the commands below. From a checkout:
+The package installs the `odr` console script (0.3.9+). From a checkout:
 `pip install -e .`.
 
 Sanity check the server (it waits on stdin — Ctrl-C to exit):
@@ -415,8 +414,8 @@ claude mcp add open-dream-rsi -- odr mcp \
   --memory /ABSOLUTE/PATH/.dream_rsi
 ```
 
-(`odr` is the console script installed with the package; on 0.3.8 or a bare
-checkout use `python3 -m open_dream_rsi` instead.)
+(`odr` is the console script installed with the package; on a bare checkout
+use `python3 -m open_dream_rsi` instead.)
 
 Check with `/mcp` inside a session.
 

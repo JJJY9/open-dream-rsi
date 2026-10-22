@@ -197,7 +197,7 @@ class AutoRSIRuntime:
         memory: DreamMemory,
         tasks: List[Task] | Callable[[], List[Task]],
         verifier: Optional[CodeVerifier] = None,
-        api_call_budget: int = 20,
+        api_call_budget: int = 100,
         dream_iterations: int = 60,
         interval_seconds: float = 300.0,
         on_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,

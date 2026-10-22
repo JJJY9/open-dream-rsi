@@ -63,9 +63,8 @@ libraries: [docs/comparison.md](docs/comparison.md).
 | **Goose** | `git clone https://github.com/patrykorwat/open-dream-rsi && cd open-dream-rsi && ./scripts/odr_goose_setup.sh` — resolves your provider, starts the proxy, writes the config itself |
 | **Claude Cowork / claude.ai** | remote-only: `odr mcp --http --port 8800` behind your tunnel — [docs/integrations.md](docs/integrations.md) |
 
-The `odr` console script ships from **0.3.9** — until that release is on
-PyPI, substitute `python3 -m open_dream_rsi` (works on 0.3.8) or install
-from a checkout (`pip install -e .`).
+The `odr` console script ships with the package (0.3.9+); from a bare
+checkout use `python3 -m open_dream_rsi` or `pip install -e .`.
 
 Point the dreamer at any OpenAI-compatible endpoint — or nowhere: the model
 is auto-detected from `/v1/models`, so a local vLLM/Ollama needs only the
@@ -226,7 +225,7 @@ nothing new to learn:
 | Tier | Triggered when | What runs |
 |---|---|---|
 | **maintenance** | quiet call (no new evidence, recent last dream) | ingest scan (cheap), ALM stale/supersede/archive/GC, skills republish — **zero LLM** |
-| **full** | `min_new_evidence` (default 3) new failure-shaped sessions, OR `max_age_seconds` (default 6 h) since the last full dream | + online attempts, dreaming, paired-replay promotion gate (`budget`, default 20 API calls) |
+| **full** | `min_new_evidence` (default 3) new failure-shaped sessions, OR `max_age_seconds` (default 6 h) since the last full dream | + online attempts, dreaming, paired-replay promotion gate (`budget`, default 100 API calls) |
 
 A busy day dreams a few times, a quiet day once, an idle day never;
 concurrent calls collapse on a single-instance lock. **Probes are queued

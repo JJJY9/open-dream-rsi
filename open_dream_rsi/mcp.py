@@ -69,6 +69,14 @@ def tool_odr_status(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def tool_odr_metrics(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Success metrics: solve rates, error/rejection classes, knowledge state."""
+    from open_dream_rsi.metrics import collect
+
+    hours = args.get("hours")
+    return collect(_memory_root(args), hours=hours)
+
+
 def tool_odr_recipes(args: Dict[str, Any]) -> Dict[str, Any]:
     """Return the best verified solution (recipe) for a task category."""
     from open_dream_rsi.memory import DreamMemory
@@ -235,7 +243,7 @@ def tool_odr_dream(args: Dict[str, Any]) -> Dict[str, Any]:
         sessions_db=args.get("sessions_db") or os.environ.get("ODR_SESSIONS_DB"),
         skills_out=args.get("skills_out") or os.environ.get("ODR_SKILLS_OUT"),
         client=client,
-        budget=int(args.get("budget", 20)),
+        budget=int(args.get("budget", 100)),
         max_tokens=int(args.get("max_tokens", 100_000)),
         category=args.get("category"),
         min_new_evidence=int(args.get("min_new_evidence", 3)),
@@ -254,6 +262,19 @@ TOOLS: Dict[str, Dict[str, Any]] = {
         "inputSchema": {"type": "object", "properties": {
             "memory": {"type": "string", "description": "Memory dir (default $ODR_MEMORY or .dream_rsi)"}}},
         "fn": tool_odr_status,
+    },
+    "odr_metrics": {
+        "description": "Success metrics for this Dream-RSI deployment: cycle "
+                       "health (api spend, budget exhaustion), per-category "
+                       "solve rates, llm-error and lesson-rejection classes, "
+                       "curation throughput, lesson states, backlog. Answers "
+                       "'is the loop actually working?'.",
+        "inputSchema": {"type": "object", "properties": {
+            "hours": {"type": "number",
+                      "description": "limit event-derived sections to the "
+                                     "last N hours (default: all history)"},
+            "memory": {"type": "string", "description": "Memory dir (default $ODR_MEMORY or .dream_rsi)"}}},
+        "fn": tool_odr_metrics,
     },
     "odr_recipes": {
         "description": "Fetch the loop's best verified solution (warm-start recipe) "

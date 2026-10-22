@@ -4,7 +4,25 @@ All notable changes to `open-dream-rsi` are documented here. Versions 0.3.0 and
 earlier are summarized from the commit history; the full log is the source of
 truth.
 
-## [0.3.9] — 2026-10-18
+## [0.3.10] — 2026-10-22
+
+### Added
+- **Success metrics** (`odr metrics`, MCP `odr_metrics`): one command answers
+  "is the loop actually working?" — cycle health (api spend, budget
+  exhaustion rate), per-category solve rates with no-solve flags,
+  llm-error and lesson-rejection classes, curation throughput (gate
+  verdicts, lessons added/merged, user corrections), lesson states,
+  backlog size and staleness; `--hours` windows the event-derived sections,
+  all-time outcomes always included; empty memory degrades to zeros.
+
+### Changed
+- **Default full-cycle budget 20 → 100** (CLI `loop`/`dream`, `dream_once`,
+  `AutoRSIRuntime`, MCP `odr_run_once`, the Hermes `odr-trigger` plugin):
+  20 starved the promotion gate (`lesson_gate_skipped reason=budget`) and
+  even skipped judge verdicts on queued tasks; 100 buys real full cycles
+  (~25 min) while staying safe for unattended triggers.
+
+## [0.3.9] — 2026-10-22
 
 ### Added
 - **Hermes one-line plugin install**: the `odr-trigger` plugin now lives at
@@ -63,6 +81,23 @@ truth.
 - **Sandbox result cache** (opt-in): LRU+TTL keyed by file contents; only
   completed runs are cached.
 
+### Fixed
+- **LLM call timeout is env-tunable** (`ODR_LLM_TIMEOUT`, default 900 s; was a
+  hard 120 s): proposal calls legitimately generate multi-kB reports and queue
+  behind other consumers on a shared vLLM — at 120 s those aborts became the
+  dominant failure and still burned API budget.
+- **Category recipes are labelled as cross-task style references** in the
+  proposal prompt: a same-category "best solution" from a different task used
+  to steer whole probe trees (e.g. a Fibonacci snippet seeded into unrelated
+  task families).
+- **Curator salvage**: mixed lesson payloads no longer die all-or-nothing —
+  valid entries survive one malformed sibling; comma/semicolon triggers fold
+  into the 1-4 word budget; the contract demands single-space keywords.
+- **odr-trigger (Hermes plugin)**: `settings.odr_root` pins the checkout the
+  dream child imports from, `ODR_*` environment passes through to the child,
+  and `OPENAI_*` stays settings-driven (no stray host override retargeting
+  the endpoint).
+
 ## [0.3.8] — 2026-10-18
 
 ### Added
@@ -117,5 +152,6 @@ truth.
 See the [commit history](https://github.com/patrykorwat/open-dream-rsi/commits/main)
 for 0.2.x and the initial release.
 
-[0.3.9]: https://github.com/patrykorwat/open-dream-rsi/compare/v0.3.8...HEAD
+[0.3.10]: https://github.com/patrykorwat/open-dream-rsi/compare/v0.3.9...HEAD
+[0.3.9]: https://github.com/patrykorwat/open-dream-rsi/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/patrykorwat/open-dream-rsi/releases/tag/v0.3.8
